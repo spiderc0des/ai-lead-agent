@@ -57,7 +57,7 @@ Use `needs_review` when the data is incomplete or mixed.
 
 Record every decision with `mcp__lead__save_lead` — including `not_qualified` ones. The rejections show the reviewer that the list was filtered rather than merely collected.
 
-`source_urls` must be pages you actually fetched with `mcp__lead__scrape_website` during this run. The tool rejects a `qualified` lead whose sources it has no record of scraping.
+`source_urls` must be pages you actually fetched with `mcp__lead__scrape_websites` during this run. The tool rejects a `qualified` lead whose sources it has no record of scraping.
 
 **When a hard filter cannot be verified.** Headcount is the usual one: a website rarely states it. Do not guess, and do not quietly drop the filter. Use proxy evidence and cite it — the number of people on a team page, the count of open roles, funding stage, explicit language like "our small team". Then:
 

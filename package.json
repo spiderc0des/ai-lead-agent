@@ -13,7 +13,9 @@
     "smoke:firecrawl": "tsx --conditions=react-server --tsconfig tsconfig.json scripts/smoke-firecrawl.ts",
     "seed:admin": "tsx --conditions=react-server --tsconfig tsconfig.json scripts/seed-admin.ts",
     "verify:actor-input": "tsx --conditions=react-server --tsconfig tsconfig.json scripts/verify-actor-input.ts",
-    "auth:doctor": "tsx --conditions=react-server --tsconfig tsconfig.json scripts/auth-doctor.ts"
+    "auth:doctor": "tsx --conditions=react-server --tsconfig tsconfig.json scripts/auth-doctor.ts",
+    "analyse:run": "tsx --conditions=react-server --tsconfig tsconfig.json scripts/analyse-run.ts",
+    "tune:discovery": "tsx --conditions=react-server --tsconfig tsconfig.json scripts/tune-discovery-filter.ts"
   },
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "^0.3.278",

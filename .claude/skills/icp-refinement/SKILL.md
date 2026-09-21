@@ -77,4 +77,24 @@ Two judgement calls decide whether the rest of the run works:
 
 **What you can actually verify.** You will qualify from public website evidence, so prefer filters a website can settle (country, what they sell, who they sell to) over ones it usually cannot (exact headcount, revenue, tech stack). Keep an unverifiable constraint as a hard filter if the user gave it, but expect to record it as a concern and lower confidence when the evidence runs out.
 
+## Turning the ICP into searches that find companies
+
+This decides whether the run works at all. A search engine returns pages that *match your words*, and the words analysts use return articles, not companies.
+
+**Search as a buyer would.** Name the software category and who it is for:
+
+- `field service management software for small business` -> returned five real product companies on a live run
+- `helpdesk software for ecommerce teams`
+- `inventory management software for small manufacturers`
+
+**Not as an analyst would.** These return listicles, VC portfolios and job boards, all of which are discarded before the agent sees them:
+
+- `B2B SaaS companies with 10-100 employees`
+- `best vertical SaaS startups 2026`
+- `funded B2B SaaS companies`
+
+Never use the words *companies*, *startups*, *list*, *best* or *top* in a query. If the ICP covers several verticals, give each its own query rather than one broad one — one category per query is what produces a usable pool.
+
+So `industries` should be concrete enough to search: "field service management", "customer support tooling", "inventory management" beat "vertical SaaS".
+
 If the objective is too vague to search, do not stop and ask — you have no interactive user. Choose a defensible reading, make it explicit in `business_problem` and `soft_preferences`, and say in your final summary what you assumed.

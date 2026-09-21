@@ -7,6 +7,7 @@ import { loadRunContext, settleBudget, releaseBudget } from "@/agent/budget";
 import { buildLeadToolServer, LEAD_TOOL_NAMES, LEAD_SERVER_NAME } from "@/agent/tools";
 import { buildSystemPrompt, buildPrompt } from "@/agent/system-prompt";
 import { logToolCall } from "@/agent/tool-logger";
+import { emptyTally, estimateCostUsd, type TokenTally } from "@/agent/pricing";
 
 /** The five skills built from the guidance docs in assets/. */
 export const REQUIRED_SKILLS = [
@@ -68,10 +69,21 @@ export async function runAgent(runId: string): Promise<TerminalStatus> {
   let terminal: TerminalStatus = "failed";
   let statusReason: string | null = null;
 
-  const heartbeat = async () => {
+  // num_turns and total_cost_usd used to be written only from the result
+  // message, which arrives once, at the very end — so both meters read zero
+  // for the whole run. These track them as the stream goes.
+  //
+  // The cost here is a FLOOR, not the bill: per-step output_tokens is a
+  // placeholder the SDK fills in properly only at the end, and output is
+  // roughly a third of the total. The result message overwrites it with the
+  // authoritative figure.
+  const seenTurnIds = new Set<string>();
+  const tally: TokenTally = emptyTally();
+
+  const heartbeat = async (extra: Record<string, unknown> = {}) => {
     await supabaseAdmin()
       .from("runs")
-      .update({ heartbeat_at: new Date().toISOString() })
+      .update({ heartbeat_at: new Date().toISOString(), ...extra })
       .eq("id", runId);
   };
 
@@ -171,7 +183,26 @@ export async function runAgent(runId: string): Promise<TerminalStatus> {
           .eq("id", runId);
       }
 
-      if (message.type === "assistant" || message.type === "user") {
+      if (message.type === "assistant" && !message.parent_tool_use_id) {
+        // Parallel tool calls in one turn share a message id, so dedupe by it.
+        // Subagent frames carry parent_tool_use_id and are not main-loop turns.
+        const id = message.message?.id;
+        const isNewTurn = Boolean(id) && !seenTurnIds.has(id!);
+        if (isNewTurn) {
+          seenTurnIds.add(id!);
+          const u = message.message?.usage;
+          if (u) {
+            tally.inputTokens += u.input_tokens ?? 0;
+            tally.outputTokens += u.output_tokens ?? 0;
+            tally.cacheReadTokens += u.cache_read_input_tokens ?? 0;
+            tally.cacheWriteTokens += u.cache_creation_input_tokens ?? 0;
+          }
+          actualCostUsd = estimateCostUsd(tally, model);
+          await heartbeat({ num_turns: seenTurnIds.size, total_cost_usd: actualCostUsd });
+        } else {
+          await heartbeat();
+        }
+      } else if (message.type === "user") {
         await heartbeat();
       }
 

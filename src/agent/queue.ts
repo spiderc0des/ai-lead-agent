@@ -1,7 +1,7 @@
 import "server-only";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { runAgent, activeRunCount, isRunning } from "@/agent/run-agent";
-import { releaseBudget } from "@/agent/budget";
+import { settleBudget } from "@/agent/budget";
 
 /**
  * Run scheduling.
@@ -136,7 +136,7 @@ export async function sweepOrphanedRuns(): Promise<number> {
 
   const { data: stale } = await supabaseAdmin()
     .from("runs")
-    .select("id, user_id, limits, heartbeat_at, started_at")
+    .select("id, user_id, limits, heartbeat_at, started_at, total_cost_usd")
     .eq("status", "running");
 
   if (!stale?.length) return 0;
@@ -164,7 +164,22 @@ export async function sweepOrphanedRuns(): Promise<number> {
       reclaimed++;
       const reserved = (run.limits as { max_budget_usd?: number })?.max_budget_usd ?? 0;
       if (reserved > 0) {
-        await releaseBudget("agent", reserved, run.id, run.user_id, "orphaned run reclaimed");
+        // A crashed run still spent real money. Releasing the whole
+        // reservation, as this used to, wrote that spend off entirely and left
+        // the shared pool over-reporting what was left. The live estimate the
+        // stream keeps is a floor rather than the true figure, but settling a
+        // floor is strictly better accounting than settling zero.
+        const spentSoFar = Number(run.total_cost_usd ?? 0);
+        await settleBudget(
+          "agent",
+          reserved,
+          spentSoFar,
+          run.id,
+          run.user_id,
+          spentSoFar > 0
+            ? `orphaned run — settled at last known estimate (a floor, the run never reported final usage)`
+            : `orphaned run — no usage was recorded before it died`,
+        );
       }
     }
   }

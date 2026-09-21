@@ -41,6 +41,13 @@ const NON_COMPANY_HOSTS = [
   "clutch.co", "goodfirms.co", "yelp.com", "bbb.org",
   "forbes.com", "techcrunch.com", "businessinsider.com", "inc.com",
   "prnewswire.com", "businesswire.com", "globenewswire.com",
+  // Investors, accelerators and market-data sites. All of these appeared in a
+  // real run's candidate pool and none of them is ever the company we want.
+  "ycombinator.com", "workatastartup.com", "a16z.com", "sequoiacap.com",
+  "tracxn.com", "cbinsights.com", "dealroom.co", "seedtable.com",
+  "topstartups.io", "f6s.com", "builtin.com", "saasvclist.com",
+  "naukri.com", "getonbrd.com", "startup.jobs", "remoterocketship.com",
+  "bebee.com", "jobsdb.com", "underdog.io", "4dayweek.io",
 ];
 
 /** Strip scheme, credentials, port, path, query and `www.` down to the host. */
@@ -137,4 +144,62 @@ export function assertPublicHttpUrl(input: string): URL {
   }
 
   return url;
+}
+
+/**
+ * Listicle and directory detection.
+ *
+ * A search for "B2B SaaS companies" returns mostly pages *about* companies:
+ * "Top 20 tools", VC portfolio lists, job boards, comparison pages. The
+ * hardcoded host list above catches the famous ones; this catches the long
+ * tail, which is where most of the pool actually goes. On a real run, 60
+ * candidates yielded roughly 15 genuine company sites — the rest were these.
+ *
+ * Judged from the search result's own title and snippet, which is free.
+ * Scraping one to find out costs a page of the scrape budget.
+ */
+const LISTICLE_PATTERNS: { name: string; re: RegExp }[] = [
+  { name: "ranked-list", re: /\b(top|best|leading)\s+\d{1,3}\b/i },
+  { name: "list-of", re: /\b(list of|a list|curated list|directory of|roundup)\b/i },
+  { name: "alternatives", re: /\b(alternatives?|competitors?)\s+(to|for|in)\b|\bvs\.?\s+\w+/i },
+  { name: "comparison", re: /\b(compared|comparison|we tested|we reviewed|buyer'?s guide)\b/i },
+  { name: "watchlist", re: /\b(companies|startups|tools|platforms)\s+to\s+(watch|know|follow)\b/i },
+  { name: "jobs-board", re: /\b(jobs?|hiring|careers?|remote work)\s+(at|board|in)\b|\b\d+\s+jobs?\b/i },
+  { name: "funding-list", re: /\b(portfolio|our investments|funded (startups|companies)|raised .{0,20}(seed|series))\b.*\b(list|companies|startups)\b/i },
+  { name: "numbered-roundup", re: /^\s*\d{1,3}\+?\s+(best|top|leading|promising|funded|great)\b/i },
+];
+
+/** Registrable domains that read as a directory rather than a product. */
+const DIRECTORY_DOMAIN = /(^|[.-])(vclist|saaslist|startuplist|toollist|directory|listings?|rankings?|reviews?|compare|alternatives)([.-]|$)/i;
+
+/** Suffixes owned by investors and advisors, never by the product company. */
+const NON_PRODUCT_TLD = /\.(vc|capital|ventures|partners|agency|consulting)$/i;
+
+export type DirectoryVerdict = { isDirectory: boolean; reason: string | null };
+
+/**
+ * @param title   the search result's title
+ * @param snippet the search result's description
+ * @param url     the result URL
+ */
+export function looksLikeDirectory(
+  title: string | null,
+  snippet: string | null,
+  url: string,
+): DirectoryVerdict {
+  const text = `${title ?? ""} ${snippet ?? ""}`.trim();
+
+  for (const p of LISTICLE_PATTERNS) {
+    if (p.re.test(text)) return { isDirectory: true, reason: p.name };
+  }
+
+  const domain = registrableDomain(url);
+  if (domain && DIRECTORY_DOMAIN.test(domain.split(".")[0])) {
+    return { isDirectory: true, reason: "directory-domain" };
+  }
+  if (domain && NON_PRODUCT_TLD.test(domain)) {
+    return { isDirectory: true, reason: "investor-or-agency-tld" };
+  }
+
+  return { isDirectory: false, reason: null };
 }

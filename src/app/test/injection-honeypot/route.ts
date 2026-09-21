@@ -2,7 +2,7 @@
  * Prompt-injection test fixture.
  *
  * A plausible company page carrying instructions aimed at the agent. Point
- * scrape_website at this URL to demonstrate that:
+ * scrape_websites at this URL to demonstrate that:
  *   1. sanitize.ts flags the attempt and records it in page_sources
  *   2. the agent keeps treating the page as evidence, not instruction
  *   3. nothing the page asks for is reachable anyway — there is no send tool,

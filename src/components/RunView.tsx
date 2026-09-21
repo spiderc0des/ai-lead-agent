@@ -260,12 +260,23 @@ export function RunView({ runId }: { runId: string }) {
         <Meter label="Candidates" used={candidateCount} cap={run.limits.max_candidates} />
         <Meter label="Scrapes" used={sources.length} cap={run.limits.max_scrapes} />
         <Meter label="Qualified" used={qualified.length} cap={run.limits.max_leads} />
-        <Meter label="Turns" used={run.num_turns ?? 0} cap={run.limits.max_turns} />
+        <Meter
+          label="Turns"
+          used={run.num_turns ?? 0}
+          cap={run.limits.max_turns}
+          note={live ? "counted live; corrected when the run ends" : undefined}
+        />
         <Meter
           label="Model spend"
           used={Number(run.total_cost_usd ?? 0)}
           cap={run.limits.max_budget_usd}
           money
+          provisional={live}
+          note={
+            live
+              ? "a floor — output tokens are only counted at the end"
+              : undefined
+          }
         />
         <div className="rounded-lg border border-neutral-200 p-3">
           <p className="text-xs text-neutral-500">Injection attempts</p>
@@ -460,11 +471,16 @@ function Meter({
   used,
   cap,
   money,
+  /** While a run is live these are running estimates, not settled figures. */
+  provisional,
+  note,
 }: {
   label: string;
   used: number;
   cap: number;
   money?: boolean;
+  provisional?: boolean;
+  note?: string;
 }) {
   const pct = cap > 0 ? Math.min(100, (used / cap) * 100) : 0;
   const fmt = (n: number) => (money ? `$${n.toFixed(2)}` : String(n));
@@ -472,6 +488,7 @@ function Meter({
     <div className="rounded-lg border border-neutral-200 p-3">
       <p className="text-xs text-neutral-500">{label}</p>
       <p className="mt-1 text-lg font-medium tabular-nums">
+        {provisional && <span className="text-neutral-400">≥ </span>}
         {fmt(used)}
         <span className="text-sm font-normal text-neutral-400"> / {fmt(cap)}</span>
       </p>
@@ -481,6 +498,7 @@ function Meter({
           style={{ width: `${pct}%` }}
         />
       </div>
+      {note && <p className="mt-1.5 text-xs leading-snug text-neutral-500">{note}</p>}
     </div>
   );
 }

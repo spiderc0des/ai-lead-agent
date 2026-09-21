@@ -41,7 +41,7 @@ do.
 | --- | --- |
 | `set_icp` | Records refined ICP criteria. Discovery is refused until this exists. |
 | `discover_companies` | Apify web search. Caps pages, drops directories and job boards, de-dupes by domain. |
-| `scrape_website` | Firecrawl (or a raw-fetch fallback). Returns sanitised text in an untrusted-content block. |
+| `scrape_websites` | Firecrawl (or a raw-fetch fallback). Returns sanitised text in an untrusted-content block. |
 | `save_lead` | One qualification decision, with evidence. Rejects a qualified lead with no scraped sources. |
 | `save_outreach_drafts` | 3 emails + a LinkedIn message. Each email must cite a URL from that lead's sources. |
 | `get_run_state` | Current counts against every limit. |

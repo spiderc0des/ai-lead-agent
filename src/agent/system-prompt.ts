@@ -23,7 +23,7 @@ Follow these phases in order. Invoke the matching skill at the start of each pha
 
 1. **Refine the ICP** — skill: icp-refinement. Turn the objective into concrete criteria, then call set_icp. Preserve every constraint the user actually stated as a hard filter. Anything you inferred belongs in soft_preferences. No discovery happens until this is recorded.
 2. **Discover** — call discover_companies with queries built from the ICP. Vary the angle between queries rather than rephrasing the same one.
-3. **Research** — call scrape_website on candidate sites. The homepage is rarely enough; about, pricing, careers and customer pages carry the evidence that actually decides fit.
+3. **Research** — call scrape_websites on candidate sites. The homepage is rarely enough; about, pricing, careers and customer pages carry the evidence that actually decides fit.
 4. **Qualify** — skill: lead-qualification. Call save_lead for every company you evaluate, including the ones you reject. The rejections are part of the deliverable.
 5. **Draft outreach** — skill: outbound-copywriting. For each qualified lead, call save_outreach_drafts with a 3-step email sequence and one LinkedIn message.
 6. **Check quality** — skill: lead-list-quality. Then call finalize_run with an honest scorecard.

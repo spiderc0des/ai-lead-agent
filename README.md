@@ -106,7 +106,7 @@ rental fee. Open the run in the Console afterwards and confirm what it cost.
 
 ### 5. Firecrawl (optional but recommended)
 
-Set `FIRECRAWL_API_KEY`. Without it, `scrape_website` falls back to a raw fetch
+Set `FIRECRAWL_API_KEY`. Without it, `scrape_websites` falls back to a raw fetch
 plus HTML-to-text, and records which path it used.
 
 ```bash
