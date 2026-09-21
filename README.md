@@ -63,11 +63,20 @@ team API token in `APIFY_TOKEN`.
 Check it before you spend anything real:
 
 ```bash
-npm run smoke:apify        # 1 query, 1 page, ~$0.002
+npm run verify:actor-input   # no token needed, no cost
+npm run smoke:apify          # 1 query, 1 page, ~$0.002
 ```
 
-That also refuses to proceed if the configured actor bills a flat monthly rental
-fee. Open the run in the Console afterwards and confirm what it actually cost.
+`verify:actor-input` reads the actor's published input schema straight from
+Apify's API and diffs it against what `buildActorInput()` sends. This matters
+because Apify **silently ignores an input field it does not recognise** — a
+renamed add-on toggle would leave that add-on running at its default, costing
+money and, for the enrichment switches, surfacing email addresses the
+outreach-safety guide forbids. Re-run it whenever the actor publishes a new
+build, or if you point `APIFY_DISCOVERY_ACTOR` somewhere else.
+
+`smoke:apify` refuses to proceed if the configured actor bills a flat monthly
+rental fee. Open the run in the Console afterwards and confirm what it cost.
 
 ### 5. Firecrawl (optional but recommended)
 
@@ -97,6 +106,7 @@ npm run dev
 | `npm run build` / `start` | Production build and serve |
 | `npm run test:guards` | Offline guard tests — no keys, no network, no database |
 | `npm run verify:skills` | Confirms all five skills load into an Agent SDK session |
+| `npm run verify:actor-input` | Diffs our actor input against Apify's published schema — no token, no cost |
 | `npm run smoke:apify` | One-page Apify run, prints the real cost |
 | `npm run smoke:firecrawl` | Scrapes one URL and shows what the agent would receive |
 | `npm run seed:admin -- <email>` | Creates/promotes an admin |

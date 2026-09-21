@@ -16,6 +16,13 @@ import { ApifyClient } from "apify-client";
 export const USD_PER_SEARCH_PAGE = 0.0018;
 
 export const DEFAULT_DISCOVERY_ACTOR = "apify/google-search-scraper";
+
+/**
+ * Assumed organic results per Google page. This is an ESTIMATE used to turn a
+ * remaining-candidate budget into a page count — the actor has no
+ * results-per-page input, so we cannot set it. Verify with
+ * `npm run verify:actor-input`.
+ */
 export const RESULTS_PER_PAGE = 10;
 
 export type DiscoveryResult = {
@@ -74,6 +81,54 @@ export async function assertActorIsMetered(): Promise<string> {
 }
 
 /**
+ * The exact input sent to the discovery actor.
+ *
+ * Exported so `scripts/verify-actor-input.ts` can diff these keys against the
+ * actor's published input schema — a name that drifts is silently ignored by
+ * Apify, which would leave a billable add-on running at its default.
+ *
+ * Every add-on below is an OBJECT in the schema, not a boolean. Sending
+ * `false` where an object is expected fails input validation; sending the
+ * documented shape with its switch off is both valid and self-documenting,
+ * and survives the actor changing a default.
+ */
+export function buildActorInput(
+  queries: string[],
+  pagesPerQuery: number,
+): Record<string, unknown> {
+  return {
+    queries: queries.join("\n"),
+
+    // Hard stop: never start an actor with an uncapped input.
+    maxPagesPerQuery: pagesPerQuery,
+
+    countryCode: "us",
+    languageCode: "en",
+    mobileResults: false,
+
+    // --- every billable add-on explicitly OFF -----------------------------
+    // Cost control, and the two enrichment switches would also breach the
+    // outreach-safety rule against finding or validating email addresses.
+    websiteContentScraper: { enable: false },
+    maximumLeadsEnrichmentRecords: 0,
+    verifyLeadsEnrichmentEmails: false,
+    focusOnPaidAds: false,
+    aiModeSearch: { enableAiMode: false },
+    aiOverview: { scrapeFullAiOverview: false },
+    chatGptSearch: { enableChatGpt: false },
+    perplexitySearch: { enablePerplexity: false },
+    copilotSearch: { enableCopilot: false },
+    geminiSearch: { enableGemini: false },
+
+    // Defaults to true. We never read the stored HTML, so don't store it.
+    saveHtmlToKeyValueStore: false,
+
+    // linkProspecting is deliberately omitted: its schema default is null,
+    // which is off. Sending an empty object could read as opting in.
+  };
+}
+
+/**
  * Run one discovery call.
  *
  * @param queries  Search queries the agent generated from the refined ICP.
@@ -92,31 +147,7 @@ export async function discoverCompanies(
   const pagesRequested = pagesPerQuery * queries.length;
 
   const run = await api.actor(actorId()).call(
-    {
-      queries: queries.join("\n"),
-      // --- hard stops: never start an actor with an uncapped input ---------
-      maxPagesPerQuery: pagesPerQuery,
-      resultsPerPage: RESULTS_PER_PAGE,
-      maxConcurrency: 2,
-
-      countryCode: "us",
-      languageCode: "en",
-      mobileResults: false,
-
-      // --- every billable add-on explicitly OFF ---------------------------
-      // Cost control, and the enrichment/verification ones would also breach
-      // the outreach-safety rule against finding or validating emails.
-      websiteContentScraper: false,
-      linkProspecting: false,
-      maximumLeadsEnrichmentRecords: 0,
-      focusOnPaidAds: false,
-      aiModeSearch: false,
-      aiOverview: false,
-      chatGptSearch: false,
-      perplexitySearch: false,
-      copilotSearch: false,
-      geminiSearch: false,
-    },
+    buildActorInput(queries, pagesPerQuery),
     {
       // Never leave an actor running: bounded wait, bounded memory.
       waitSecs: 180,

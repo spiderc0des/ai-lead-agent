@@ -84,6 +84,12 @@ from tool_calls
 where run_id = :'run_id' and status = 'limit_blocked';
 ```
 
+**Also worth attaching here:** `npm run verify:actor-input` output, showing that
+every field the app sends exists in the actor's published schema with the right
+type — i.e. that the paid add-ons are genuinely off rather than merely intended
+to be. Apify ignores unknown input keys silently, so this is the only way to
+prove it short of reading the charged-event counts on a run.
+
 **Run id:**
 **Result:**
 
