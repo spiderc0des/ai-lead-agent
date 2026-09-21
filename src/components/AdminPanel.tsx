@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { ConfirmButton } from "@/components/ConfirmButton";
 
 type Budget = {
   apify_cap_usd: number;
@@ -40,9 +41,9 @@ export function AdminPanel({ budget }: { budget: Budget }) {
 
   return (
     <div className="space-y-6">
-      <section className="rounded-lg border border-neutral-200 p-4">
+      <section className="card">
         <h2 className="text-sm font-semibold">Shared budget</h2>
-        <p className="mt-1 text-xs text-neutral-500">
+        <p className="hint">
           One pool across every user. Reservations are held while a run is in flight and settled
           against the real cost when it finishes.
         </p>
@@ -65,24 +66,24 @@ export function AdminPanel({ budget }: { budget: Budget }) {
         </div>
 
         <div className="mt-4 flex flex-wrap items-end gap-3">
-          <label className="text-xs text-neutral-600">
+          <label className="label">
             Apify cap ($)
             <input
               type="number"
               step="0.5"
               value={apifyCap}
               onChange={(e) => setApifyCap(Number(e.target.value))}
-              className="mt-1 block w-28 rounded border border-neutral-300 px-2 py-1 text-sm"
+              className="field mt-1 w-28"
             />
           </label>
-          <label className="text-xs text-neutral-600">
+          <label className="label">
             Model cap ($)
             <input
               type="number"
               step="1"
               value={agentCap}
               onChange={(e) => setAgentCap(Number(e.target.value))}
-              className="mt-1 block w-28 rounded border border-neutral-300 px-2 py-1 text-sm"
+              className="field mt-1 w-28"
             />
           </label>
           <button
@@ -90,27 +91,28 @@ export function AdminPanel({ budget }: { budget: Budget }) {
             onClick={() =>
               post("/api/admin/budget", { apify_cap_usd: apifyCap, agent_cap_usd: agentCap })
             }
-            className="rounded-md bg-neutral-900 px-3 py-1.5 text-sm text-white disabled:opacity-50"
+            className="btn btn-primary btn-sm"
           >
             Save caps
           </button>
-          <button
-            disabled={busy}
-            onClick={() => post("/api/admin/budget", { runs_paused: !budget.runs_paused })}
-            className={`rounded-md px-3 py-1.5 text-sm ${
+          <ConfirmButton
+            label={budget.runs_paused ? "Resume new runs" : "Pause new runs"}
+            confirmLabel={budget.runs_paused ? "Resume" : "Pause"}
+            question={budget.runs_paused ? "Let everyone start runs again?" : "Stop everyone starting new runs?"}
+            detail={
               budget.runs_paused
-                ? "bg-emerald-700 text-white"
-                : "border border-neutral-300 text-neutral-800"
-            } disabled:opacity-50`}
-          >
-            {budget.runs_paused ? "Resume new runs" : "Pause new runs"}
-          </button>
+                ? "Anything already queued will begin immediately."
+                : "Runs already in flight keep going; only new ones are refused. This affects every user."
+            }
+            busy={busy}
+            onConfirm={() => post("/api/admin/budget", { runs_paused: !budget.runs_paused })}
+          />
         </div>
       </section>
 
-      <section className="rounded-lg border border-neutral-200 p-4">
+      <section className="card">
         <h2 className="text-sm font-semibold">Invite a user</h2>
-        <p className="mt-1 text-xs text-neutral-500">
+        <p className="hint">
           Signup is closed. An address only gets a sign-in link once it has an account, and this is
           the only way to create one.
         </p>
@@ -120,12 +122,12 @@ export function AdminPanel({ budget }: { budget: Budget }) {
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             placeholder="teammate@company.com"
-            className="w-64 rounded border border-neutral-300 px-2 py-1.5 text-sm"
+            className="field w-64"
           />
           <button
             disabled={busy || !email.includes("@")}
             onClick={() => post("/api/admin/invite", { email })}
-            className="rounded-md bg-neutral-900 px-3 py-1.5 text-sm text-white disabled:opacity-50"
+            className="btn btn-primary btn-sm"
           >
             Send invite
           </button>
@@ -133,7 +135,7 @@ export function AdminPanel({ budget }: { budget: Budget }) {
       </section>
 
       {note && (
-        <p className="rounded border border-neutral-200 bg-neutral-50 px-3 py-2 text-sm">{note}</p>
+        <p className="panel panel-info">{note}</p>
       )}
     </div>
   );
@@ -154,18 +156,18 @@ function BudgetCard({
 }) {
   const pct = cap > 0 ? Math.min(100, ((spent + reserved) / cap) * 100) : 0;
   return (
-    <div className="rounded border border-neutral-200 p-3">
-      <p className="text-xs text-neutral-500">{title}</p>
+    <div className="card p-3">
+      <p className="text-xs" style={{ color: "var(--ink-faint)" }}>{title}</p>
       <p className="mt-1 text-lg font-medium tabular-nums">
         ${left.toFixed(4)} <span className="text-sm font-normal text-neutral-400">left</span>
       </p>
-      <div className="mt-2 h-1 w-full rounded bg-neutral-100">
+      <div className="mt-2 h-1 w-full rounded" style={{ background: "var(--rule)" }}>
         <div
-          className={`h-1 rounded ${pct > 90 ? "bg-amber-500" : "bg-neutral-900"}`}
-          style={{ width: `${pct}%` }}
+          className="h-1 rounded"
+          style={{ width: `${pct}%`, background: pct > 90 ? "var(--warning)" : "var(--accent)" }}
         />
       </div>
-      <p className="mt-1.5 text-xs text-neutral-500">
+      <p className="hint">
         spent ${spent.toFixed(4)} · reserved ${reserved.toFixed(4)} · cap ${cap.toFixed(2)}
       </p>
     </div>

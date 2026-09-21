@@ -96,9 +96,9 @@ export function NewRunForm({ hasActiveRun }: { hasActiveRun: boolean }) {
   const blocked = hasActiveRun || budget?.runs_paused;
 
   return (
-    <form onSubmit={start} className="rounded-lg border border-neutral-200 p-5">
+    <form onSubmit={start} className="card">
       <h2 className="text-sm font-semibold">New run</h2>
-      <p className="mt-1 text-sm text-neutral-500">
+      <p className="hint">
         Describe who you want to reach. The agent refines this into ICP criteria before it
         searches.
       </p>
@@ -110,12 +110,12 @@ export function NewRunForm({ hasActiveRun }: { hasActiveRun: boolean }) {
         required
         minLength={10}
         placeholder={EXAMPLE}
-        className="mt-4 w-full rounded-md border border-neutral-300 px-3 py-2 text-sm outline-none focus:border-neutral-900"
+        className="field mt-4"
       />
       <button
         type="button"
         onClick={() => setObjective(EXAMPLE)}
-        className="mt-1 text-xs text-neutral-500 underline underline-offset-4"
+        className="btn btn-ghost btn-sm mt-1 px-0"
       >
         use the example objective
       </button>
@@ -124,7 +124,7 @@ export function NewRunForm({ hasActiveRun }: { hasActiveRun: boolean }) {
         <button
           type="button"
           onClick={() => setShowLimits((s) => !s)}
-          className="text-xs text-neutral-600 underline underline-offset-4"
+          className="btn btn-ghost btn-sm px-0"
         >
           {showLimits ? "hide limits" : "adjust limits"}
         </button>
@@ -132,8 +132,8 @@ export function NewRunForm({ hasActiveRun }: { hasActiveRun: boolean }) {
         {showLimits && (
           <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3">
             {LIMIT_FIELDS.map(({ key, label, help, stop }) => (
-              <label key={key} className="text-xs text-neutral-600">
-                <span className="font-medium text-neutral-800">{label}</span>
+              <label key={key} className="text-xs">
+                <span className="label mb-0">{label}</span>
                 <input
                   type="number"
                   step={key === "max_budget_usd" ? "0.25" : "1"}
@@ -141,11 +141,11 @@ export function NewRunForm({ hasActiveRun }: { hasActiveRun: boolean }) {
                   onChange={(e) =>
                     setLimits({ ...limits, [key]: Number(e.target.value) })
                   }
-                  className="mt-1 w-full rounded border border-neutral-300 px-2 py-1 text-sm"
+                  className="field mt-1"
                 />
-                <span className="mt-1 block leading-snug text-neutral-500">
+                <span className="hint block">
                   {help}{" "}
-                  <span className={stop === "hard" ? "text-amber-700" : "text-neutral-500"}>
+                  <span className={stop === "hard" ? "font-medium" : ""} style={stop === "hard" ? { color: "var(--warning)" } : undefined}>
                     {stop === "hard" ? "Hits it and the run is cut off." : "Hits it and the agent adapts."}
                   </span>
                 </span>
@@ -156,7 +156,7 @@ export function NewRunForm({ hasActiveRun }: { hasActiveRun: boolean }) {
       </div>
 
       {budget && (
-        <p className="mt-4 text-xs text-neutral-500">
+        <p className="hint mt-4">
           Shared budget left — discovery ${budget.apify_remaining_usd.toFixed(2)} of $
           {budget.apify_cap_usd.toFixed(2)} · model ${budget.agent_remaining_usd.toFixed(2)} of $
           {budget.agent_cap_usd.toFixed(2)}. Both pools are shared by everyone using this app;
@@ -165,17 +165,17 @@ export function NewRunForm({ hasActiveRun }: { hasActiveRun: boolean }) {
       )}
 
       {hasActiveRun && (
-        <p className="mt-3 rounded border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+        <p className="panel panel-warning mt-3">
           You already have a run in progress. One at a time — the workers are shared.
         </p>
       )}
       {budget?.runs_paused && (
-        <p className="mt-3 rounded border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+        <p className="panel panel-warning mt-3">
           New runs are paused by an administrator.
         </p>
       )}
       {error && (
-        <p className="mt-3 rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
+        <p className="panel panel-danger mt-3">
           {error}
         </p>
       )}
@@ -183,7 +183,7 @@ export function NewRunForm({ hasActiveRun }: { hasActiveRun: boolean }) {
       <button
         type="submit"
         disabled={busy || blocked || objective.trim().length < 10}
-        className="mt-4 rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-40"
+        className="btn btn-primary mt-4"
       >
         {busy ? "Starting…" : "Start run"}
       </button>

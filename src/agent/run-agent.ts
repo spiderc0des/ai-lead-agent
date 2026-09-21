@@ -8,6 +8,7 @@ import { buildLeadToolServer, LEAD_TOOL_NAMES, LEAD_SERVER_NAME } from "@/agent/
 import { buildSystemPrompt, buildPrompt } from "@/agent/system-prompt";
 import { logToolCall } from "@/agent/tool-logger";
 import { emptyTally, estimateCostUsd, type TokenTally } from "@/agent/pricing";
+import { sendRunFinished } from "@/lib/email";
 
 /** The five skills built from the guidance docs in assets/. */
 export const REQUIRED_SKILLS = [
@@ -286,7 +287,62 @@ export async function runAgent(runId: string): Promise<TerminalStatus> {
       .eq("id", runId);
   }
 
+  await notifyOwner(runId, terminal);
   return terminal;
+}
+
+/**
+ * Tell the owner their run is done. A run takes twenty minutes or more, so
+ * nobody should have to watch the page to find out.
+ *
+ * Never allowed to affect the run's outcome: the run has already finished and
+ * been recorded by the time this is called, and every failure is swallowed.
+ */
+async function notifyOwner(runId: string, terminal: TerminalStatus): Promise<void> {
+  try {
+    const db = supabaseAdmin();
+    const { data: run } = await db
+      .from("runs")
+      .select("id, user_id, objective, status, status_reason, limits, total_cost_usd, duration_ms")
+      .eq("id", runId)
+      .single();
+    if (!run) return;
+
+    const { data: profile } = await db
+      .from("profiles")
+      .select("email")
+      .eq("id", run.user_id)
+      .maybeSingle();
+    if (!profile?.email) return;
+
+    const countOf = async (table: string, extra?: [string, string]) => {
+      let q = db.from(table).select("id", { count: "exact", head: true }).eq("run_id", runId);
+      if (extra) q = q.eq(extra[0], extra[1]);
+      return (await q).count ?? 0;
+    };
+
+    const { data: flagged } = await db
+      .from("page_sources")
+      .select("injection_flags")
+      .eq("run_id", runId);
+
+    const outcome = await sendRunFinished(profile.email, {
+      runId,
+      objective: run.objective,
+      status: run.status ?? terminal,
+      statusReason: run.status_reason ?? null,
+      qualified: await countOf("leads", ["qualification_status", "qualified"]),
+      targetLeads: (run.limits as { max_leads?: number })?.max_leads ?? 0,
+      evaluated: await countOf("leads"),
+      costUsd: Number(run.total_cost_usd ?? 0),
+      durationMs: run.duration_ms ?? null,
+      injectionAttempts: (flagged ?? []).filter((p) => p.injection_flags?.length).length,
+    });
+
+    if (!outcome.sent) console.log(`[email] run ${runId} notification not sent: ${outcome.reason}`);
+  } catch (err) {
+    console.error("[email] notification failed:", err);
+  }
 }
 
 /** Only used by scripts/verify-skills.ts; kept here so the path logic is shared. */

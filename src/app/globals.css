@@ -1,10 +1,163 @@
 @import "tailwindcss";
 
+/*
+ * Design tokens. Every colour in the app resolves through one of these, so a
+ * theme change is a change to this block and nowhere else.
+ */
+:root {
+  --paper: #faf9f5;
+  --card: #ffffff;
+  --ink: #141413;
+  --ink-soft: #57534a;
+  --ink-faint: #8a8578;
+  --accent: #2f5d8a;
+  --accent-soft: #eaf1f8;
+  --rule: #e4e1d9;
+  --danger: #8a2f24;
+  --danger-soft: #fbeeec;
+  --warning: #8a5a17;
+  --warning-soft: #fdf4e6;
+  --success: #2b5f3f;
+  --success-soft: #eaf3ed;
+  --radius: 10px;
+  --shadow-sm: 0 1px 2px rgb(20 20 19 / 0.05);
+  --shadow: 0 2px 8px rgb(20 20 19 / 0.07);
+}
+
+[data-theme="dark"] {
+  --paper: #14140f;
+  --card: #1d1d19;
+  --ink: #f2f0e9;
+  --ink-soft: #a8a496;
+  --ink-faint: #75715f;
+  --accent: #8fb6dc;
+  --accent-soft: #1b2630;
+  --rule: #33322a;
+  --danger: #e59b90;
+  --danger-soft: #2e1c19;
+  --warning: #ddb06a;
+  --warning-soft: #2b2115;
+  --success: #8fc4a2;
+  --success-soft: #17251c;
+  --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.3);
+  --shadow: 0 2px 8px rgb(0 0 0 / 0.35);
+}
+
 @theme inline {
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
 
 body {
-  font-family: var(--font-geist-sans), system-ui, sans-serif;
+  background: var(--paper);
+  color: var(--ink);
+  -webkit-font-smoothing: antialiased;
 }
+
+/* ─── Buttons ────────────────────────────────────────────────────────────── */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.5rem 0.9rem;
+  border-radius: var(--radius);
+  border: 1px solid var(--rule);
+  background: var(--card);
+  color: var(--ink);
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.12s, border-color 0.12s, opacity 0.12s;
+}
+.btn:hover:not(:disabled) { border-color: var(--ink-faint); }
+.btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.btn-primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+[data-theme="dark"] .btn-primary { color: #14140f; }
+.btn-primary:hover:not(:disabled) { opacity: 0.9; }
+.btn-danger { background: var(--danger); border-color: var(--danger); color: #fff; }
+[data-theme="dark"] .btn-danger { color: #14140f; }
+.btn-ghost { background: transparent; border-color: transparent; color: var(--ink-soft); }
+.btn-ghost:hover:not(:disabled) { background: var(--accent-soft); border-color: transparent; }
+.btn-sm { padding: 0.3rem 0.6rem; font-size: 0.8rem; }
+
+/* ─── Surfaces ───────────────────────────────────────────────────────────── */
+
+.card {
+  background: var(--card);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  padding: 1.25rem;
+  box-shadow: var(--shadow-sm);
+}
+.card-link { display: block; text-decoration: none; color: inherit; transition: box-shadow 0.12s, border-color 0.12s; }
+.card-link:hover { box-shadow: var(--shadow); border-color: var(--ink-faint); }
+
+.panel { border-radius: var(--radius); padding: 0.85rem 1rem; font-size: 0.875rem; border: 1px solid; }
+.panel-info { background: var(--accent-soft); border-color: var(--rule); color: var(--ink); }
+.panel-danger { background: var(--danger-soft); border-color: var(--danger); color: var(--danger); }
+.panel-warning { background: var(--warning-soft); border-color: var(--warning); color: var(--warning); }
+.panel-success { background: var(--success-soft); border-color: var(--success); color: var(--success); }
+
+/* ─── Forms ──────────────────────────────────────────────────────────────── */
+
+.label { display: block; font-size: 0.8rem; font-weight: 600; color: var(--ink-soft); margin-bottom: 0.3rem; }
+.hint { font-size: 0.78rem; color: var(--ink-faint); margin-top: 0.25rem; line-height: 1.45; }
+
+.field {
+  width: 100%;
+  padding: 0.5rem 0.7rem;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  background: var(--card);
+  color: var(--ink);
+  font: inherit;
+  font-size: 0.9rem;
+}
+.field:focus { outline: 2px solid var(--accent); outline-offset: -1px; border-color: var(--accent); }
+.field:disabled { background: var(--paper); color: var(--ink-faint); }
+textarea.field { min-height: 5rem; resize: vertical; }
+
+/* ─── Status ─────────────────────────────────────────────────────────────── */
+
+.badge {
+  display: inline-block;
+  padding: 0.15rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  border: 1px solid var(--rule);
+  background: var(--paper);
+  color: var(--ink-soft);
+  white-space: nowrap;
+}
+.badge-accent { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
+.badge-danger { background: var(--danger-soft); border-color: var(--danger); color: var(--danger); }
+.badge-warning { background: var(--warning-soft); border-color: var(--warning); color: var(--warning); }
+.badge-success { background: var(--success-soft); border-color: var(--success); color: var(--success); }
+
+.chip {
+  display: inline-block;
+  padding: 0.1rem 0.45rem;
+  border-radius: 4px;
+  font-size: 0.72rem;
+  background: var(--accent-soft);
+  color: var(--ink-soft);
+  border: 1px solid var(--rule);
+}
+
+/* ─── Long content ───────────────────────────────────────────────────────── */
+
+/* Scraped pages and drafted copy: line breaks are meaningful, and a line that
+   runs the full width of a desktop card is genuinely harder to read back. */
+.preformatted { white-space: pre-wrap; font-size: 0.875rem; line-height: 1.6; max-width: 72ch; }
+
+table.data { width: 100%; font-size: 0.875rem; border-collapse: collapse; }
+table.data thead th {
+  text-align: left; font-size: 0.72rem; font-weight: 600; letter-spacing: 0.04em;
+  text-transform: uppercase; color: var(--ink-faint); padding: 0.5rem 0.75rem;
+  background: var(--paper); border-bottom: 1px solid var(--rule);
+}
+table.data td { padding: 0.6rem 0.75rem; border-bottom: 1px solid var(--rule); vertical-align: top; }
+table.data tbody tr:last-child td { border-bottom: none; }

@@ -3,8 +3,9 @@ import { redirect } from "next/navigation";
 import { currentProfile } from "@/lib/auth";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { AppHeader } from "@/components/AppHeader";
+import { Collapsible } from "@/components/Collapsible";
 import { AdminPanel } from "@/components/AdminPanel";
-import { StatusBadge } from "@/components/StatusBadge";
+import { StatusPill } from "@/components/StatusPill";
 
 export const dynamic = "force-dynamic";
 
@@ -36,40 +37,40 @@ export default async function AdminPage() {
   return (
     <>
       <AppHeader profile={profile} />
-      <main className="mx-auto w-full max-w-6xl flex-1 px-6 py-8">
+      <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-8 sm:px-6">
         <h1 className="text-lg font-semibold">Admin</h1>
 
         <div className="mt-6">{budget && <AdminPanel budget={budget} />}</div>
 
-        <section className="mt-8">
-          <h2 className="text-sm font-semibold">All runs</h2>
-          <div className="mt-3 overflow-x-auto rounded-lg border border-neutral-200">
-            <table className="w-full text-sm">
-              <thead className="bg-neutral-50 text-left text-xs uppercase tracking-wide text-neutral-500">
+        <div className="mt-6 space-y-4">
+        <Collapsible title="All runs" count={runs?.length ?? 0} defaultOpen subtitle="every user">
+          <div className="overflow-x-auto">
+            <table className="data">
+              <thead >
                 <tr>
-                  <th className="px-3 py-2 font-medium">When</th>
-                  <th className="px-3 py-2 font-medium">Owner</th>
-                  <th className="px-3 py-2 font-medium">Objective</th>
-                  <th className="px-3 py-2 font-medium">Status</th>
-                  <th className="px-3 py-2 font-medium">Cost</th>
+                  <th >When</th>
+                  <th >Owner</th>
+                  <th >Objective</th>
+                  <th >Status</th>
+                  <th >Cost</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-neutral-200">
+              <tbody >
                 {(runs ?? []).map((r) => (
                   <tr key={r.id}>
-                    <td className="whitespace-nowrap px-3 py-2 text-xs text-neutral-500">
+                    <td className="whitespace-nowrap text-xs">
                       {new Date(r.created_at).toLocaleString()}
                     </td>
-                    <td className="px-3 py-2 text-xs">{emailById.get(r.user_id) ?? "—"}</td>
-                    <td className="max-w-md truncate px-3 py-2">
-                      <Link href={`/runs/${r.id}`} className="underline underline-offset-4">
+                    <td className="text-xs">{emailById.get(r.user_id) ?? "—"}</td>
+                    <td className="max-w-md truncate">
+                      <Link href={`/runs/${r.id}`} style={{ color: "var(--accent)" }}>
                         {r.objective}
                       </Link>
                     </td>
-                    <td className="px-3 py-2">
-                      <StatusBadge status={r.status} />
+                    <td >
+                      <StatusPill status={r.status} />
                     </td>
-                    <td className="px-3 py-2 text-xs tabular-nums">
+                    <td className="text-xs tabular-nums">
                       ${Number(r.total_cost_usd ?? 0).toFixed(4)}
                     </td>
                   </tr>
@@ -77,38 +78,35 @@ export default async function AdminPage() {
               </tbody>
             </table>
           </div>
-        </section>
+        </Collapsible>
 
-        <section className="mt-8">
-          <h2 className="text-sm font-semibold">Budget ledger</h2>
-          <p className="mt-1 text-xs text-neutral-500">
-            Every reserve, settle and release, newest first.
-          </p>
-          <div className="mt-3 overflow-x-auto rounded-lg border border-neutral-200">
-            <table className="w-full text-sm">
-              <tbody className="divide-y divide-neutral-200">
+        <Collapsible title="Budget ledger" count={ledger?.length ?? 0} subtitle="every reserve, settle and release, newest first">
+          <div className="overflow-x-auto">
+            <table className="data">
+              <tbody >
                 {(ledger ?? []).map((l) => (
                   <tr key={l.id}>
-                    <td className="whitespace-nowrap px-3 py-1.5 text-xs text-neutral-500">
+                    <td className="whitespace-nowrap text-xs">
                       {new Date(l.created_at).toLocaleTimeString()}
                     </td>
-                    <td className="px-3 py-1.5 text-xs font-mono">{l.kind}</td>
-                    <td className="px-3 py-1.5 text-xs">{l.phase}</td>
-                    <td className="px-3 py-1.5 text-xs tabular-nums">
+                    <td className="font-mono text-xs">{l.kind}</td>
+                    <td className="text-xs">{l.phase}</td>
+                    <td className="text-xs tabular-nums">
                       ${Number(l.amount_usd).toFixed(4)}
                     </td>
-                    <td className="px-3 py-1.5 text-xs text-neutral-500">{l.note ?? ""}</td>
+                    <td className="text-xs">{l.note ?? ""}</td>
                   </tr>
                 ))}
                 {!ledger?.length && (
                   <tr>
-                    <td className="px-3 py-3 text-sm text-neutral-500">Nothing spent yet.</td>
+                    <td className="text-sm">Nothing spent yet.</td>
                   </tr>
                 )}
               </tbody>
             </table>
           </div>
-        </section>
+        </Collapsible>
+        </div>
       </main>
     </>
   );

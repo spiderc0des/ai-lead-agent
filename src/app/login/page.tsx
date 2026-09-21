@@ -1,8 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { Suspense } from "react";
 import { supabaseBrowser } from "@/lib/supabase/client";
 
 function LoginForm() {
@@ -17,11 +16,9 @@ function LoginForm() {
     setBusy(true);
 
     const next = params.get("next") ?? "/";
-    const supabase = supabaseBrowser();
-
-    // shouldCreateUser: false is what actually closes signup. An address that
+    // shouldCreateUser:false is what actually closes signup — an address that
     // was never invited simply never receives a link.
-    await supabase.auth.signInWithOtp({
+    await supabaseBrowser().auth.signInWithOtp({
       email: email.trim(),
       options: {
         shouldCreateUser: false,
@@ -29,59 +26,43 @@ function LoginForm() {
       },
     });
 
-    // Always the same response, whether or not the address exists — the form
+    // Always the same response, whether or not the address exists: the form
     // must not double as a way to discover who has access.
     setBusy(false);
     setSent(true);
   }
 
   return (
-    <main className="mx-auto flex min-h-screen max-w-md flex-col justify-center px-6">
-      <h1 className="text-2xl font-semibold tracking-tight">Lead Agent</h1>
-      <p className="mt-2 text-sm text-neutral-500">
-        AI lead research and outreach drafting. Access is invite-only.
-      </p>
+    <main className="mx-auto flex min-h-screen w-full max-w-md flex-col justify-center px-4">
+      <div className="mb-6 flex items-center gap-2">
+        <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-sm font-bold text-white"
+              style={{ background: "var(--accent)" }}>L</span>
+        <h1 className="text-lg font-semibold tracking-tight">Lead Agent</h1>
+      </div>
+      <p className="hint">AI lead research and outreach drafting. Access is invite-only.</p>
 
       {linkError && (
-        <p className="mt-6 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900">
-          That sign-in link did not work ({linkError}). Links are single-use and expire — request a
-          new one.
+        <p className="panel panel-warning mt-5">
+          That sign-in link did not work ({linkError}). Links are single-use and expire — request a new one.
         </p>
       )}
 
       {sent ? (
-        <div className="mt-8 rounded-md border border-neutral-200 bg-neutral-50 p-4">
+        <div className="card mt-6">
           <p className="text-sm">
-            If <span className="font-medium">{email}</span> is registered, a sign-in link is on its
-            way. It expires shortly.
+            If <span className="font-medium">{email}</span> is registered, a sign-in link is on its way.
+            It expires shortly.
           </p>
-          <button
-            onClick={() => setSent(false)}
-            className="mt-3 text-sm text-neutral-600 underline underline-offset-4"
-          >
+          <button onClick={() => setSent(false)} className="btn btn-ghost btn-sm mt-3 px-0">
             Use a different address
           </button>
         </div>
       ) : (
-        <form onSubmit={onSubmit} className="mt-8 flex flex-col gap-3">
-          <label htmlFor="email" className="text-sm font-medium">
-            Email address
-          </label>
-          <input
-            id="email"
-            type="email"
-            required
-            autoComplete="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            placeholder="you@company.com"
-            className="rounded-md border border-neutral-300 px-3 py-2 text-sm outline-none focus:border-neutral-900"
-          />
-          <button
-            type="submit"
-            disabled={busy}
-            className="rounded-md bg-neutral-900 px-3 py-2 text-sm font-medium text-white disabled:opacity-50"
-          >
+        <form onSubmit={onSubmit} className="card mt-6">
+          <label htmlFor="email" className="label">Email address</label>
+          <input id="email" type="email" required autoComplete="email" value={email}
+                 onChange={(e) => setEmail(e.target.value)} placeholder="you@company.com" className="field" />
+          <button type="submit" disabled={busy} className="btn btn-primary mt-3 w-full justify-center">
             {busy ? "Sending…" : "Send sign-in link"}
           </button>
         </form>
@@ -91,9 +72,5 @@ function LoginForm() {
 }
 
 export default function LoginPage() {
-  return (
-    <Suspense>
-      <LoginForm />
-    </Suspense>
-  );
+  return <Suspense><LoginForm /></Suspense>;
 }
