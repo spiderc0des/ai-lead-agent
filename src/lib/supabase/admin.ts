@@ -22,7 +22,17 @@ export function supabaseAdmin(): SupabaseClient {
     );
   }
 
-  cached = createClient(url, key, {
+  // supabase-js appends /rest/v1, /auth/v1 and friends itself. A URL that
+  // already carries a path yields requests to /rest/v1/rest/v1/… whose errors
+  // never mention the real cause, so fail loudly here instead.
+  const origin = new URL(url).origin;
+  if (new URL(url).pathname.replace(/\/$/, "") !== "") {
+    throw new Error(
+      `NEXT_PUBLIC_SUPABASE_URL must be the bare project URL with no path. Got ${url}; use ${origin}.`,
+    );
+  }
+
+  cached = createClient(origin, key, {
     auth: { autoRefreshToken: false, persistSession: false },
   });
   return cached;

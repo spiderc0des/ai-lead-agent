@@ -8,7 +8,7 @@
  *
  *   npm run verify:skills
  */
-import "dotenv/config";
+import "./env";
 import { query } from "@anthropic-ai/claude-agent-sdk";
 import { existsSync } from "node:fs";
 import path from "node:path";
@@ -92,6 +92,7 @@ async function main() {
 }
 
 main().catch((err) => {
-  console.error(err);
+  // Config mistakes are the common case here; a stack trace buries the message.
+  console.error(`\n${err instanceof Error ? err.message : String(err)}`);
   process.exit(1);
 });

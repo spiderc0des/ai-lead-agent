@@ -6,7 +6,8 @@
  *
  *   npm run seed:admin -- you@company.com
  */
-import "dotenv/config";
+import "./env";
+import { assertSupabaseUrl, requireEnv } from "./env";
 import { createClient } from "@supabase/supabase-js";
 
 async function main() {
@@ -16,12 +17,9 @@ async function main() {
     process.exit(1);
   }
 
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!url || !key) {
-    console.error("NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY must be set.");
-    process.exit(1);
-  }
+  requireEnv("NEXT_PUBLIC_SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY");
+  const url = assertSupabaseUrl();
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 
   const db = createClient(url, key, { auth: { persistSession: false } });
 
@@ -57,6 +55,7 @@ async function main() {
 }
 
 main().catch((err) => {
-  console.error(err);
+  // Config mistakes are the common case here; a stack trace buries the message.
+  console.error(`\n${err instanceof Error ? err.message : String(err)}`);
   process.exit(1);
 });

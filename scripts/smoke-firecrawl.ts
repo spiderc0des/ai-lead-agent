@@ -5,7 +5,7 @@
  * honeypot:
  *   npm run smoke:firecrawl -- https://your-app.example/test/injection-honeypot
  */
-import "dotenv/config";
+import "./env";
 import { scrapePage, firecrawlConfigured } from "@/lib/firecrawl";
 import { sanitizeScrapedContent } from "@/agent/sanitize";
 import { assertPublicHttpUrl } from "@/lib/domain";

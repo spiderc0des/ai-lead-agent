@@ -8,7 +8,7 @@
  *
  *   npm run smoke:apify
  */
-import "dotenv/config";
+import "./env";
 import { assertActorIsMetered, discoverCompanies, estimateDiscoveryCostUsd } from "@/lib/apify";
 
 async function main() {

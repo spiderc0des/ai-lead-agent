@@ -11,7 +11,7 @@
  *
  *   npm run verify:actor-input
  */
-import "dotenv/config";
+import "./env";
 import { buildActorInput, DEFAULT_DISCOVERY_ACTOR } from "@/lib/apify";
 
 type SchemaProp = {

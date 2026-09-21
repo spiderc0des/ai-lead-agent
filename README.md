@@ -35,8 +35,14 @@ supabase/migrations/0002_auth_rls.sql   profiles, admin role, RLS, realtime
 supabase/migrations/0003_budget.sql     shared spend ledger
 ```
 
-Put the project URL and both keys in `.env.local`. The service-role key is
-server-only and must never get a `NEXT_PUBLIC_` prefix.
+Put the project URL and both keys in `.env.local`. Two things that bite:
+
+- `NEXT_PUBLIC_SUPABASE_URL` is the **bare** project URL — `https://x.supabase.co`,
+  not `https://x.supabase.co/rest/v1/`. The client adds those paths itself.
+- The service-role key is server-only and must never get a `NEXT_PUBLIC_` prefix.
+
+Scripts read `.env.local` first and fall back to `.env`, the same precedence
+Next.js uses.
 
 Under **Authentication → URL Configuration**, add `<your app>/auth/confirm` to
 the redirect allowlist (including `http://localhost:3000/auth/confirm` for local
