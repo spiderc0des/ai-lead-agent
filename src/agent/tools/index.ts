@@ -47,7 +47,12 @@ import { withLogging, textResult, errorResult, LimitError } from "@/agent/tools/
  */
 export const LEAD_SERVER_NAME = "lead";
 
-export function buildLeadToolServer(ctx: RunContext): McpSdkServerConfigWithInstance {
+/**
+ * The tool definitions themselves, so tests can drive a handler directly
+ * instead of spending a model turn to reach it. Every guard in here is a
+ * server-side invariant; none of them needs an agent to exercise.
+ */
+export function buildLeadTools(ctx: RunContext) {
   /* ------------------------------------------------------------- set_icp -- */
 
   const setIcp = tool(
@@ -772,21 +777,25 @@ export function buildLeadToolServer(ctx: RunContext): McpSdkServerConfigWithInst
     { annotations: { readOnlyHint: false, openWorldHint: false } },
   );
 
+  return [
+    setIcp,
+    discoverCompaniesTool,
+    scrapeWebsites,
+    saveLead,
+    saveOutreachDrafts,
+    getRunState,
+    finalizeRun,
+  ];
+}
+
+export function buildLeadToolServer(ctx: RunContext): McpSdkServerConfigWithInstance {
   return createSdkMcpServer({
     name: LEAD_SERVER_NAME,
     version: "1.0.0",
     instructions:
       "Tools for lead research and outreach drafting. Limits are enforced server-side: " +
       "if a tool refuses, the refusal is final and cannot be argued with.",
-    tools: [
-      setIcp,
-      discoverCompaniesTool,
-      scrapeWebsites,
-      saveLead,
-      saveOutreachDrafts,
-      getRunState,
-      finalizeRun,
-    ],
+    tools: buildLeadTools(ctx),
   });
 }
 

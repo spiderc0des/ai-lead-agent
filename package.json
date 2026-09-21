@@ -15,7 +15,8 @@
     "verify:actor-input": "tsx --conditions=react-server --tsconfig tsconfig.json scripts/verify-actor-input.ts",
     "auth:doctor": "tsx --conditions=react-server --tsconfig tsconfig.json scripts/auth-doctor.ts",
     "analyse:run": "tsx --conditions=react-server --tsconfig tsconfig.json scripts/analyse-run.ts",
-    "tune:discovery": "tsx --conditions=react-server --tsconfig tsconfig.json scripts/tune-discovery-filter.ts"
+    "tune:discovery": "tsx --conditions=react-server --tsconfig tsconfig.json scripts/tune-discovery-filter.ts",
+    "test:tools": "tsx --conditions=react-server --tsconfig tsconfig.json scripts/test-tools.ts"
   },
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "^0.3.278",
