@@ -44,9 +44,29 @@ Put the project URL and both keys in `.env.local`. Two things that bite:
 Scripts read `.env.local` first and fall back to `.env`, the same precedence
 Next.js uses.
 
-Under **Authentication → URL Configuration**, add `<your app>/auth/confirm` to
-the redirect allowlist (including `http://localhost:3000/auth/confirm` for local
-work).
+Then three Auth settings that are easy to miss, and each fails quietly:
+
+- **Authentication → URL Configuration** — add `<your app>/auth/confirm` to the
+  redirect allowlist, including `http://localhost:3000/auth/confirm`. A link to
+  an unlisted URL is rejected *after* the user clicks it.
+- **Authentication → Providers → Email** — confirm the provider is enabled.
+- **Authentication → Emails → SMTP Settings** — the built-in sender is a shared
+  testing service with a low hourly cap and no delivery guarantee. Point it at
+  Resend, SendGrid or Gmail SMTP before you rely on a link arriving.
+
+If a link does not arrive, do not guess:
+
+```bash
+npm run auth:doctor -- you@company.com
+```
+
+It reads the real auth state (does the user exist, is the email confirmed, is
+the profile there, is the role right) and then **mints a working sign-in link
+and prints it**, so email delivery stops blocking you.
+
+The `/auth/confirm` route accepts both callback shapes — PKCE `?code=` and
+`?token_hash=&type=` — so it works whether or not you customise the email
+template.
 
 ### 3. First admin
 
@@ -116,6 +136,7 @@ npm run dev
 | `npm run smoke:apify` | One-page Apify run, prints the real cost |
 | `npm run smoke:firecrawl` | Scrapes one URL and shows what the agent would receive |
 | `npm run seed:admin -- <email>` | Creates/promotes an admin |
+| `npm run auth:doctor -- <email>` | Why no sign-in link arrived — and prints one that works |
 
 ---
 
