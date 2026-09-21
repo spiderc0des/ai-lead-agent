@@ -4,13 +4,17 @@ import { supabaseAdmin } from "@/lib/supabase/admin";
 import { CreateRunSchema, DEFAULT_LIMITS, RunLimitsSchema } from "@/lib/schemas";
 import { budgetStatus, reserveBudget, releaseBudget } from "@/agent/budget";
 import { pumpQueue } from "@/agent/queue";
-import { estimateDiscoveryCostUsd } from "@/lib/apify";
+import { APIFY_MIN_RUN_CHARGE_USD } from "@/lib/apify";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-/** Refuse to start a run that could not afford even one discovery call. */
-const MIN_APIFY_HEADROOM_USD = estimateDiscoveryCostUsd(4);
+/**
+ * Refuse to start a run that could not afford even one discovery call.
+ * Apify will not accept a per-run charge cap below its own floor, so the pool
+ * has to be able to absorb that ceiling regardless of the real cost.
+ */
+const MIN_APIFY_HEADROOM_USD = APIFY_MIN_RUN_CHARGE_USD;
 
 export async function POST(request: Request) {
   try {

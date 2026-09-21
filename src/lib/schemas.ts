@@ -24,13 +24,20 @@ export const RunLimitsSchema = z.object({
 
 export type RunLimits = z.infer<typeof RunLimitsSchema>;
 
+/**
+ * Defaults tuned from the first real run, which spent $0.85 and 54 of 60 turns
+ * while reaching only 14 companies and one qualified lead. Verifying a
+ * headcount filter from public pages rejects most candidates, so the pool has
+ * to be several times the target and the turn budget has to leave room for
+ * drafting after all that qualification.
+ */
 export const DEFAULT_LIMITS: RunLimits = {
-  max_candidates: 40,
-  max_scrapes: 25,
+  max_candidates: 60,
+  max_scrapes: 45,
   max_leads: 10,
-  max_turns: 60,
-  max_budget_usd: 1.5,
-  wall_clock_ms: 20 * 60 * 1000,
+  max_turns: 140,
+  max_budget_usd: 3,
+  wall_clock_ms: 30 * 60 * 1000,
 };
 
 /* -------------------------------------------------------------------------

@@ -25,6 +25,7 @@ import { registrableDomain, isNonCompanyHost, assertPublicHttpUrl } from "@/lib/
 import {
   discoverCompanies,
   estimateDiscoveryCostUsd,
+  APIFY_MIN_RUN_CHARGE_USD,
   RESULTS_PER_PAGE,
 } from "@/lib/apify";
 import { scrapePage } from "@/lib/firecrawl";
@@ -123,8 +124,13 @@ export function buildLeadToolServer(ctx: RunContext): McpSdkServerConfigWithInst
           ),
         );
 
-        // Reserve the worst case from the shared cap BEFORE spending anything.
-        const estimate = estimateDiscoveryCostUsd(maxPages);
+        // Apify refuses a per-run charge cap below its floor, so the shared
+        // pool has to be able to absorb that ceiling even though the real
+        // spend is a fraction of it.
+        const estimate = Math.max(
+          estimateDiscoveryCostUsd(maxPages),
+          APIFY_MIN_RUN_CHARGE_USD,
+        );
         const reservation = await reserveBudget(
           "apify",
           estimate,
@@ -248,16 +254,36 @@ export function buildLeadToolServer(ctx: RunContext): McpSdkServerConfigWithInst
         // Blocks file://, localhost, and private/link-local ranges.
         const url = assertPublicHttpUrl(args.url);
 
-        const page = await scrapePage(url.toString());
-        const clean = sanitizeScrapedContent(page.markdown, page.url);
-
-        const domain = registrableDomain(page.url);
-        const { data: candidate } = await supabaseAdmin()
+        // Provenance gate. A lead list is only research if the companies came
+        // from discovery; without this the agent can fall back on companies it
+        // already knows when discovery fails, and the run still looks like a
+        // researched list. That substitution is exactly what the PRD's
+        // "use Apify for company discovery" requirement rules out, so it is
+        // enforced here rather than asked for in the prompt.
+        const targetDomain = registrableDomain(url.toString());
+        const { data: known } = await supabaseAdmin()
           .from("candidates")
           .select("id")
           .eq("run_id", ctx.runId)
-          .eq("domain", domain ?? "")
+          .eq("domain", targetDomain ?? "")
           .maybeSingle();
+
+        if (!known) {
+          return {
+            result: errorResult(
+              `${targetDomain ?? url.hostname} is not a candidate on this run, so it cannot be ` +
+                `scraped. Companies must come from discover_companies — a company you already ` +
+                `know of is recall, not research, and cannot go in the lead list. ` +
+                `If discovery is failing, stop and report that in finalize_run instead of ` +
+                `working around it.`,
+            ),
+          };
+        }
+
+        const page = await scrapePage(url.toString());
+        const clean = sanitizeScrapedContent(page.markdown, page.url);
+
+        const candidate = known;
 
         const { error } = await supabaseAdmin().from("page_sources").insert({
           run_id: ctx.runId,

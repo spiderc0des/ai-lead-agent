@@ -15,6 +15,16 @@ import { ApifyClient } from "apify-client";
 /** Pay-per-event price of the default actor: $1.80 per 1,000 result pages. */
 export const USD_PER_SEARCH_PAGE = 0.0018;
 
+/**
+ * Apify's own floor for `maxTotalChargeUsd`. A run asking for less is rejected
+ * outright with "Maximum cost per run is less than the allowed minimum".
+ *
+ * This is a CEILING, not a spend: a real discovery call costs about $0.007.
+ * The actual limiter is maxPagesPerQuery plus our own ledger reservation —
+ * this only stops a runaway actor.
+ */
+export const APIFY_MIN_RUN_CHARGE_USD = 0.5;
+
 export const DEFAULT_DISCOVERY_ACTOR = "apify/google-search-scraper";
 
 /**
@@ -152,7 +162,10 @@ export async function discoverCompanies(
       // Never leave an actor running: bounded wait, bounded memory.
       waitSecs: 180,
       memory: 1024,
-      maxItems: pagesRequested,
+      // maxItems is the PAY-PER-RESULT lever and is ignored by a
+      // pay-per-event actor; maxTotalChargeUsd is the one that applies here.
+      // Passing the wrong one had every discovery call rejected at start.
+      maxTotalChargeUsd: APIFY_MIN_RUN_CHARGE_USD,
     },
   );
 
