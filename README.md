@@ -1,36 +1,161 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Lead Agent
 
-## Getting Started
+AI lead research and outreach drafting, built on the **Claude Agent SDK**.
 
-First, run the development server:
+Enter a qualification objective; the agent refines it into ICP criteria,
+discovers companies via Apify, reads their websites via Firecrawl, qualifies
+them from evidence, and drafts a 3-step cold email sequence plus a LinkedIn
+message for each qualified lead. Everything lands in Supabase for human review.
+
+It never finds personal email addresses, never checks deliverability, and never
+sends anything — there is no tool in the session that could.
+
+See [`docs/one-pager.md`](docs/one-pager.md) for how it works, and
+[`docs/testing-evidence.md`](docs/testing-evidence.md) for the verification
+queries.
+
+---
+
+## Setup
+
+### 1. Install
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install
+cp .env.example .env.local     # then fill it in
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+### 2. Supabase
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+Create a project, then run the three migrations in order in the SQL editor:
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```
+supabase/migrations/0001_init.sql       domain tables
+supabase/migrations/0002_auth_rls.sql   profiles, admin role, RLS, realtime
+supabase/migrations/0003_budget.sql     shared spend ledger
+```
 
-## Learn More
+Put the project URL and both keys in `.env.local`. The service-role key is
+server-only and must never get a `NEXT_PUBLIC_` prefix.
 
-To learn more about Next.js, take a look at the following resources:
+Under **Authentication → URL Configuration**, add `<your app>/auth/confirm` to
+the redirect allowlist (including `http://localhost:3000/auth/confirm` for local
+work).
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+### 3. First admin
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+Signup is closed, so the first account has to be created out of band:
 
-## Deploy on Vercel
+```bash
+npm run seed:admin -- you@company.com
+```
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+That invites the address if it does not exist and gives it the `admin` role.
+The invite email doubles as a sign-in link. Everyone else is invited from
+`/admin`.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+### 4. Apify
+
+Accept the team invite, then **switch to the team account in the Apify Console
+before running anything** — runs bill to whichever account starts them. Use the
+team API token in `APIFY_TOKEN`.
+
+Check it before you spend anything real:
+
+```bash
+npm run smoke:apify        # 1 query, 1 page, ~$0.002
+```
+
+That also refuses to proceed if the configured actor bills a flat monthly rental
+fee. Open the run in the Console afterwards and confirm what it actually cost.
+
+### 5. Firecrawl (optional but recommended)
+
+Set `FIRECRAWL_API_KEY`. Without it, `scrape_website` falls back to a raw fetch
+plus HTML-to-text, and records which path it used.
+
+```bash
+npm run smoke:firecrawl
+npm run smoke:firecrawl -- https://example.com/some-page
+```
+
+### 6. Run it
+
+```bash
+npm run verify:skills      # all five skills load into a session
+npm run test:guards        # offline: injection handling, domain rules, URL guards
+npm run dev
+```
+
+---
+
+## Scripts
+
+| Command | What it does |
+| --- | --- |
+| `npm run dev` | Development server |
+| `npm run build` / `start` | Production build and serve |
+| `npm run test:guards` | Offline guard tests — no keys, no network, no database |
+| `npm run verify:skills` | Confirms all five skills load into an Agent SDK session |
+| `npm run smoke:apify` | One-page Apify run, prints the real cost |
+| `npm run smoke:firecrawl` | Scrapes one URL and shows what the agent would receive |
+| `npm run seed:admin -- <email>` | Creates/promotes an admin |
+
+---
+
+## Deployment
+
+One container, one process: UI, API and the agent worker together. The agent
+runs as a background task in the same Node process, so a serverless request
+handler will not work — a full run takes many minutes.
+
+```bash
+docker build -t lead-agent \
+  --build-arg NEXT_PUBLIC_SUPABASE_URL=... \
+  --build-arg NEXT_PUBLIC_SUPABASE_ANON_KEY=... \
+  --build-arg NEXT_PUBLIC_APP_URL=https://your-app.example .
+```
+
+Deploy to Railway, Render, Fly, or any host that runs a long-lived container,
+and set the server-side env vars there.
+
+Two deployment details that matter:
+
+- **`.claude/` must ship.** It holds the skills. The Dockerfile copies it
+  explicitly and sets `AGENT_CWD=/app`. If it is missing, runs abort at startup
+  with `Skills failed to load` rather than running skill-less.
+- **Not a `standalone` build.** The Agent SDK spawns the Claude Code CLI and
+  resolves a platform-specific binary at runtime, which the standalone tracer
+  does not follow.
+
+Add the deployed origin to Supabase's auth redirect allowlist.
+
+---
+
+## How spend is controlled
+
+Three independent layers, none of which depend on the model behaving:
+
+1. **Per-run limits** are frozen into the run record at creation. Each tool
+   clamps against a count read back from Postgres before spending, so a restart
+   or two concurrent calls cannot overshoot.
+2. **A global ledger** caps Apify and model spend across *all* users. A run
+   reserves its worst case before calling a paid API and settles the actual
+   afterwards, inside a single-row conditional UPDATE — concurrent users
+   serialise on the row lock.
+3. **`maxBudgetUsd`, `maxTurns` and a wall-clock abort** bound the agent session
+   itself.
+
+Adjust the shared caps, or pause all new runs, from `/admin`.
+
+## Project layout
+
+```
+.claude/skills/     five skills built from the project's guidance docs
+src/agent/          the Agent SDK session, its tools, and the guards
+src/lib/            Supabase clients, Apify, Firecrawl, schemas, domain rules
+src/app/            UI and API routes
+supabase/           SQL migrations
+scripts/            smoke tests, guard tests, admin seeding
+docs/               one-pager and testing evidence
+```

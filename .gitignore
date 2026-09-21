@@ -39,3 +39,11 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# local env
+.env
+.env.local
+.env*.local
+
+# agent run artifacts
+/tmp-runs
