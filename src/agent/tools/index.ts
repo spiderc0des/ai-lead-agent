@@ -522,7 +522,10 @@ export function buildLeadTools(ctx: RunContext) {
     "save_outreach_drafts",
     "Attach a 3-step cold email sequence plus one LinkedIn message to a qualified lead. " +
       "Every email must cite an evidence_url drawn from that lead's source_urls, so each claim " +
-      "is traceable. Drafts are for human review only — nothing is ever sent.",
+      "is traceable. Write as a person emailing one company, not as marketing copy: plain, " +
+      "concrete subject lines, email 1 under 90 words, no diagnosis of what is happening " +
+      "inside their business, and one answerable question rather than an offer of a meeting. " +
+      "Drafts are for human review only — nothing is ever sent.",
     OutreachShape,
     async (args) =>
       withLogging(ctx, "save_outreach_drafts", `Outreach for ${args.company_domain}`, args, async () => {

@@ -71,6 +71,46 @@ Before finalizing copy, check:
 
 ---
 
+## How this should actually sound
+
+The guide says "write like a person, not a promotion". That is the rule most drafts break, and they break it while sounding perfectly competent. Judge a draft by whether a busy founder would believe a human typed it to them specifically.
+
+**Subject lines.** A real person writes a subject that says what the email is about. Marketers write subjects that sell the benefit.
+
+| Wrong | Why | Better |
+| --- | --- | --- |
+| Scaling Truffle's own support without adding headcount | A whitepaper title. Promises an outcome before saying anything. | quick question about Truffle's onboarding |
+| Repeat-role customers, repeat internal work | Clever construction that means nothing until you read the body. | your repeat-roles page |
+| Unlocking efficiency for lean teams | Pure category language. Could be sent to anyone. | Ashby + Breezy + Zapier |
+
+Short, lowercase-ish, concrete. Naming the specific thing you noticed beats describing a benefit.
+
+**Body.** Cut these on sight:
+
+- **The diagnosis you cannot support.** "That kind of growth usually means someone is stretched across repetitive work." You do not know that. Say what you saw, then ask — do not tell them what is happening inside their company.
+- **"I'd guess…"** followed by a paragraph about their operations. Guessing at length is still guessing.
+- **The brochure sentence.** "Koya places trained AI automation assistants with early-stage teams like yours to take on exactly that kind of workflow." Nobody writes that to one person. Try: "I place AI automation assistants with teams around your size."
+- **Stacked em-dash asides.** One per email at most. Three makes it an essay.
+- **Tricolon lists.** "answering the same setup questions, triaging trial signups, prepping reporting" is a copywriter's rhythm, not speech.
+- **"Worth a quick conversation about…"** and "happy to find 15 minutes". Just ask the question.
+
+**Length.** Email 1 under 90 words. Two short paragraphs and a question is a complete email. If it needs a third paragraph, the observation is not specific enough.
+
+**The ask.** One question, answerable in a sentence. "Is that actually a pain for you right now?" beats any offer of a meeting — a reply is the goal, not a booking.
+
+**A worked example.** Same evidence, rewritten:
+
+> **Subject:** Ashby + Breezy + Zapier
+>
+> Hi — saw on your About page that Truffle is self-funded and remote-first, with three people listed, and that you're wiring together Ashby, Breezy and Zapier.
+>
+> I place AI automation assistants with teams about that size, usually to take over the repetitive parts of onboarding and support. Is that actually where your time is going at the moment, or is it somewhere else?
+>
+> Best,
+> [Your name]
+
+Everything factual in it points at a page you read. Nothing claims to know how the company feels.
+
 ## How to use this in a run
 
 Call `mcp__lead__save_outreach_drafts` with all three email steps and the LinkedIn message in one call.

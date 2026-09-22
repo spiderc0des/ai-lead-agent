@@ -6,7 +6,8 @@ import { StatusPill } from "@/components/StatusPill";
 import { Collapsible } from "@/components/Collapsible";
 import { CopyButton } from "@/components/CopyButton";
 import { RunActions } from "@/components/RunActions";
-import { OutreachCard, type Draft } from "@/components/OutreachCard";
+import { type Draft } from "@/components/OutreachCard";
+import { LeadList } from "@/components/LeadList";
 import type { Icp, RunLimits } from "@/lib/schemas";
 
 type Run = {
@@ -102,8 +103,6 @@ export function RunView({ runId }: { runId: string }) {
   const qualified = leads.filter((l) => l.qualification_status === "qualified");
   const live = !TERMINAL.includes(run.status);
   const flagged = sources.filter((s) => s.injection_flags?.length);
-  const draftsByLead = new Map<string, Draft[]>();
-  for (const d of drafts) draftsByLead.set(d.lead_id, [...(draftsByLead.get(d.lead_id) ?? []), d]);
 
   return (
     <div className="space-y-4">
@@ -170,52 +169,18 @@ export function RunView({ runId }: { runId: string }) {
         </div>
       </div>
 
-      {/* --------------------------------------------- qualified leads --- */}
-      <Collapsible title="Qualified leads" count={qualified.length} defaultOpen
-                   subtitle={qualified.length ? undefined : "nothing qualified yet"}>
-        {qualified.length === 0 ? (
-          <p className="text-sm" style={{ color: "var(--ink-faint)" }}>
-            No company has met every hard filter on the evidence found so far.
-          </p>
-        ) : (
-          <div className="space-y-4">
-            {qualified.map((l) => (
-              <div key={l.id} className="space-y-3">
-                <LeadEvidence lead={l} sources={sources} />
-                <OutreachCard companyName={l.company_name} companyDomain={l.company_domain}
-                              drafts={draftsByLead.get(l.id) ?? []} />
-              </div>
-            ))}
-          </div>
-        )}
-      </Collapsible>
-
-      {/* ------------------------------------------- every decision ------ */}
-      <Collapsible title="All qualification decisions" count={leads.length}
-                   subtitle="including the rejections, which are part of the deliverable">
-        <div className="overflow-x-auto">
-          <table className="data">
-            <thead>
-              <tr><th>Company</th><th>Status</th><th>Conf.</th><th>Fit reasons</th><th>Concerns</th><th>Src</th></tr>
-            </thead>
-            <tbody>
-              {leads.map((l) => (
-                <tr key={l.id}>
-                  <td>
-                    <div className="font-medium">{l.company_name}</div>
-                    <div className="text-xs" style={{ color: "var(--ink-faint)" }}>{l.company_domain}</div>
-                  </td>
-                  <td><StatusPill status={l.qualification_status} /></td>
-                  <td className="tabular-nums">{l.confidence?.toFixed(2)}</td>
-                  <td className="text-xs">{l.fit_reasons?.slice(0, 2).join("; ")}</td>
-                  <td className="text-xs">{l.concerns?.slice(0, 2).join("; ") || "—"}</td>
-                  <td className="tabular-nums">{l.source_urls?.length ?? 0}</td>
-                </tr>
-              ))}
-              {!leads.length && <tr><td colSpan={6} style={{ color: "var(--ink-faint)" }}>No decisions yet.</td></tr>}
-            </tbody>
-          </table>
-        </div>
+      {/* ------------------------------------------------------- leads --- */}
+      <Collapsible
+        title="Qualification results"
+        count={leads.length}
+        defaultOpen
+        subtitle={
+          leads.length
+            ? `${qualified.length} qualified · rejections are part of the deliverable`
+            : "nothing evaluated yet"
+        }
+      >
+        <LeadList leads={leads} drafts={drafts} sources={sources} />
       </Collapsible>
 
       {/* ------------------------------------------- scraped sources ----- */}
@@ -286,51 +251,6 @@ export function RunView({ runId }: { runId: string }) {
           </dl>
         </Collapsible>
       )}
-    </div>
-  );
-}
-
-function LeadEvidence({ lead, sources }: { lead: Lead; sources: PageSource[] }) {
-  const mine = sources.filter((s) => lead.source_urls?.includes(s.url));
-  return (
-    <div className="card">
-      <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <h3 className="text-sm font-semibold">
-          {lead.company_name}{" "}
-          <span className="font-normal" style={{ color: "var(--ink-faint)" }}>{lead.company_domain}</span>
-        </h3>
-        <span className="chip">confidence {lead.confidence?.toFixed(2)}</span>
-      </div>
-      <p className="mt-2 text-sm">{lead.source_summary}</p>
-      <dl className="mt-3 grid gap-3 sm:grid-cols-2">
-        <div>
-          <dt className="label">Why it fits</dt>
-          <dd><ul className="list-disc pl-5 text-sm">{lead.fit_reasons?.map((r) => <li key={r}>{r}</li>)}</ul></dd>
-        </div>
-        {lead.concerns?.length > 0 && (
-          <div>
-            <dt className="label">Concerns</dt>
-            <dd><ul className="list-disc pl-5 text-sm" style={{ color: "var(--ink-soft)" }}>
-              {lead.concerns.map((c) => <li key={c}>{c}</li>)}</ul></dd>
-          </div>
-        )}
-      </dl>
-      <div className="mt-3">
-        <dt className="label">Sources</dt>
-        <ul className="text-sm">
-          {lead.source_urls?.map((u) => {
-            const src = mine.find((s) => s.url === u);
-            return (
-              <li key={u}>
-                <a href={u} target="_blank" rel="noreferrer noopener" style={{ color: "var(--accent)" }}>{u}</a>
-                {src?.injection_flags?.length ? (
-                  <span className="ml-2 text-xs" style={{ color: "var(--danger)" }}>(injection attempt flagged)</span>
-                ) : null}
-              </li>
-            );
-          })}
-        </ul>
-      </div>
     </div>
   );
 }

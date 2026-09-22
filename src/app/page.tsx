@@ -3,12 +3,11 @@ import { redirect } from "next/navigation";
 import { currentProfile } from "@/lib/auth";
 import { supabaseServer } from "@/lib/supabase/server";
 import { AppHeader } from "@/components/AppHeader";
-import { StatusPill } from "@/components/StatusPill";
-import { NewRunForm } from "@/components/NewRunForm";
+import { RunsList, type RunRow } from "@/components/RunsList";
 
 export const dynamic = "force-dynamic";
 
-export default async function HomePage() {
+export default async function RunsPage() {
   const profile = await currentProfile();
   if (!profile) redirect("/login");
 
@@ -19,38 +18,40 @@ export default async function HomePage() {
     .from("runs")
     .select("id, objective, status, created_at, total_cost_usd, limits")
     .order("created_at", { ascending: false })
-    .limit(30);
+    .limit(50);
 
-  const hasActiveRun = (runs ?? []).some((r) => ["queued", "running"].includes(r.status as string));
+  // One count query for the lot rather than one per run.
+  const { data: qualifiedRows } = await supabase
+    .from("leads")
+    .select("run_id")
+    .eq("qualification_status", "qualified");
+
+  const qualifiedByRun = new Map<string, number>();
+  for (const l of qualifiedRows ?? []) {
+    qualifiedByRun.set(l.run_id as string, (qualifiedByRun.get(l.run_id as string) ?? 0) + 1);
+  }
+
+  const rows: RunRow[] = (runs ?? []).map((r) => ({
+    id: r.id as string,
+    objective: r.objective as string,
+    status: r.status as string,
+    created_at: r.created_at as string,
+    total_cost_usd: r.total_cost_usd as number | null,
+    limits: r.limits as RunRow["limits"],
+    qualified: qualifiedByRun.get(r.id as string) ?? 0,
+  }));
 
   return (
     <>
       <AppHeader profile={profile} />
       <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-8 sm:px-6">
-        <NewRunForm hasActiveRun={hasActiveRun} />
-
-        <h2 className="mt-10 text-sm font-semibold">Your runs</h2>
-        {!runs?.length ? (
-          <p className="mt-3 text-sm" style={{ color: "var(--ink-faint)" }}>No runs yet. Start one above.</p>
-        ) : (
-          <ul className="mt-3 space-y-2">
-            {runs.map((run) => (
-              <li key={run.id}>
-                <Link href={`/runs/${run.id}`} className="card card-link flex items-start justify-between gap-4 p-4">
-                  <div className="min-w-0">
-                    <p className="truncate text-sm">{run.objective}</p>
-                    <p className="mt-0.5 text-xs" style={{ color: "var(--ink-faint)" }}>
-                      {new Date(run.created_at as string).toLocaleString()} · $
-                      {Number(run.total_cost_usd ?? 0).toFixed(4)} of $
-                      {(run.limits as { max_budget_usd?: number })?.max_budget_usd?.toFixed(2) ?? "—"}
-                    </p>
-                  </div>
-                  <StatusPill status={run.status as string} />
-                </Link>
-              </li>
-            ))}
-          </ul>
-        )}
+        <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+          <h1 className="text-lg font-semibold">Your runs</h1>
+          <Link href="/new" className="btn btn-primary btn-sm no-underline">
+            New run
+          </Link>
+        </div>
+        <RunsList runs={rows} />
       </main>
     </>
   );
