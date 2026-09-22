@@ -10,9 +10,9 @@ message for each qualified lead. Everything lands in Supabase for human review.
 It never finds personal email addresses, never checks deliverability, and never
 sends anything — there is no tool in the session that could.
 
-See [`docs/one-pager.md`](docs/one-pager.md) for how it works, and
-[`docs/testing-evidence.md`](docs/testing-evidence.md) for the verification
-queries.
+`docs/` holds the one-pager and the testing-evidence queries. It is kept out of
+version control on purpose, so it is not in this repository — ask the author
+for a copy.
 
 ---
 
@@ -194,5 +194,5 @@ src/lib/            Supabase clients, Apify, Firecrawl, schemas, domain rules
 src/app/            UI and API routes
 supabase/           SQL migrations
 scripts/            smoke tests, guard tests, admin seeding
-docs/               one-pager and testing evidence
+docs/               one-pager and testing evidence (untracked)
 ```

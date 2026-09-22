@@ -48,4 +48,5 @@ next-env.d.ts
 # agent run artifacts
 /tmp-runs
 
+# working docs kept local: one-pager and testing evidence
 docs/
