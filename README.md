@@ -153,8 +153,45 @@ docker build -t lead-agent \
   --build-arg NEXT_PUBLIC_APP_URL=https://your-app.example .
 ```
 
-Deploy to Railway, Render, Fly, or any host that runs a long-lived container,
-and set the server-side env vars there.
+### Railway, step by step
+
+1. **New Project → Deploy from GitHub repo**, pick this repository. Railway
+   detects the Dockerfile on its own; there is no build command to set.
+2. **Variables.** Add everything from `.env.example`. The three `NEXT_PUBLIC_*`
+   ones are inlined into the browser bundle at build time, which is why the
+   Dockerfile declares them as `ARG` — Railway passes service variables through
+   as build arguments.
+3. **Settings → Networking → Generate Domain.** You cannot know the URL before
+   the service exists, so this is a chicken-and-egg: deploy once, take the
+   domain, set `NEXT_PUBLIC_APP_URL` to it, and redeploy. Magic links and the
+   injection-honeypot URL both depend on it being right.
+4. **Settings → Deploy → Replicas: 1.** Not optional. The run queue keeps each
+   run's AbortController in memory and claims work with a conditional UPDATE
+   that is only correct for a single process. Two replicas means two workers
+   racing for the same runs, and Cancel only reaching whichever instance
+   happens to hold it.
+5. **Memory: 1 GB or more.** Each run spawns the Claude Code CLI as a
+   subprocess alongside Next.js; 512 MB is tight.
+6. **Health check path `/login`** — it is public and returns 200, where `/`
+   redirects.
+7. **Supabase → Authentication → URL Configuration**: add
+   `https://<your-domain>/auth/confirm` to the redirect allowlist, or every
+   sign-in link is rejected after it is clicked.
+
+Then verify, in this order, because each one catches a different mistake:
+
+```
+https://<domain>/login                      200, and the form sends a link
+https://<domain>/test/injection-honeypot    200 without signing in
+```
+
+If sign-in fails with a Supabase key error, the `NEXT_PUBLIC_*` variables were
+missing at **build** time, not run time — set them and redeploy rather than
+restart. If a run aborts immediately with "Skills failed to load", `.claude/`
+did not make it into the image.
+
+Other hosts (Render, Fly) work the same way: one long-lived container, one
+replica, the same variables.
 
 Two deployment details that matter:
 
