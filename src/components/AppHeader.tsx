@@ -8,8 +8,8 @@ export function AppHeader({ profile }: { profile: Profile }) {
   // two cannot drift. Profile is deliberately absent: the avatar links there,
   // and a nav item for it would be a second route to the same page.
   const links: NavLink[] = [
-    { href: "/", label: "Runs" },
     { href: "/new", label: "New run" },
+    { href: "/", label: "Runs" },
     ...(profile.role === "admin" ? [{ href: "/admin", label: "Admin" }] : []),
   ];
 
