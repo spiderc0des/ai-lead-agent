@@ -5,24 +5,28 @@ import { supabaseAdmin } from "@/lib/supabase/admin";
 import { RunLimitsSchema } from "@/lib/schemas";
 import { budgetStatus, reserveBudget, releaseBudget } from "@/agent/budget";
 import { pumpQueue } from "@/agent/queue";
+import { recordRunEvent } from "@/lib/run-events";
 
 export const runtime = "nodejs";
 
 const Body = z.object({
   /** Answers to the clarification questions, in the order they were asked. */
   answers: z.array(z.string()).optional(),
-  /** Approve the recorded ICP and go straight to discovery. */
+  /** Approve the recorded ICP and go on to discovery. */
   approve: z.boolean().optional(),
 });
 
+/** Below this the run could not do anything useful with a new session. */
+const MIN_SESSION_BUDGET_USD = 0.1;
+
 /**
- * Answer a run that stopped waiting on a person, by starting the next one.
+ * Resume a run that stopped waiting on a person — the same run, not a new one.
  *
- * Not a resume: the agent session is not persisted, so there is nothing to
- * resume. It is also the better shape — the original run keeps its questions
- * and its unapproved ICP as evidence of what was asked, rather than being
- * mutated into something that no longer shows it. The two are linked by
- * parent_run_id.
+ * The agent session itself is not persisted, so the resume is a fresh session
+ * under the same run id. Everything that matters carries over because it lives
+ * in the database rather than the session: the ICP, candidates, scraped pages,
+ * leads, and the limits, which are enforced against run-wide counts. Money is
+ * cumulative too — the new session reserves only what the run has left.
  */
 export async function POST(request: Request, ctx: { params: Promise<{ id: string }> }) {
   try {
@@ -30,110 +34,115 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
     const { id } = await ctx.params;
 
     const parsed = Body.safeParse(await request.json());
-    if (!parsed.success) {
-      return NextResponse.json({ error: "Invalid request" }, { status: 400 });
-    }
+    if (!parsed.success) return NextResponse.json({ error: "Invalid request" }, { status: 400 });
 
-    const { data: parent } = await supabaseAdmin()
+    const db = supabaseAdmin();
+    const { data: run } = await db
       .from("runs")
-      .select("id, user_id, objective, icp, limits, status, clarification_questions")
+      .select("id, user_id, status, limits, total_cost_usd, clarification_questions")
       .eq("id", id)
       .maybeSingle();
 
-    if (!parent) return NextResponse.json({ error: "Run not found" }, { status: 404 });
-    if (parent.user_id !== user.id && user.role !== "admin") {
+    if (!run) return NextResponse.json({ error: "Run not found" }, { status: 404 });
+    if (run.user_id !== user.id && user.role !== "admin") {
       return NextResponse.json({ error: "Not your run" }, { status: 403 });
     }
-    if (parent.status !== "needs_clarification" && parent.status !== "awaiting_confirmation") {
+    if (run.status !== "needs_clarification" && run.status !== "awaiting_confirmation") {
       return NextResponse.json(
-        { error: `This run is ${parent.status} — there is nothing waiting on you.` },
+        { error: `This run is ${String(run.status).replace(/_/g, " ")} — nothing is waiting on you.` },
         { status: 409 },
       );
     }
 
-    // One run at a time per person, as everywhere else.
-    const { data: active } = await supabaseAdmin()
+    // The owner's one-at-a-time rule still applies to the resumed session.
+    const { data: active } = await db
       .from("runs")
       .select("id")
-      .eq("user_id", user.id)
+      .eq("user_id", run.user_id)
       .in("status", ["queued", "running"])
+      .neq("id", id)
       .maybeSingle();
     if (active) {
       return NextResponse.json(
-        { error: "You already have a run in progress. Wait for it to finish first." },
+        { error: "Another run is already in progress. Wait for it to finish first." },
         { status: 409 },
       );
     }
 
-    const parentLimits = RunLimitsSchema.parse(parent.limits);
-    let objective = parent.objective as string;
-    let seedIcp: unknown = null;
-
-    if (parent.status === "awaiting_confirmation") {
+    // Validate the reply before touching money.
+    let answeredPairs: { question: string; answer: string }[] = [];
+    if (run.status === "awaiting_confirmation") {
       if (!parsed.data.approve) {
         return NextResponse.json({ error: "Approve the criteria to continue." }, { status: 400 });
       }
-      // Carry the approved criteria forward so the agent starts at discovery.
-      seedIcp = parent.icp;
     } else {
-      const answers = (parsed.data.answers ?? []).map((a) => a.trim()).filter(Boolean);
-      if (answers.length === 0) {
+      const questions = (run.clarification_questions ?? []) as string[];
+      const answers = parsed.data.answers ?? [];
+      answeredPairs = questions
+        .map((q, i) => ({ question: q, answer: (answers[i] ?? "").trim() }))
+        .filter((p) => p.answer);
+      if (answeredPairs.length === 0) {
         return NextResponse.json(
-          { error: "Answer at least one question so the objective has something to go on." },
+          { error: "Answer at least one question so the run has something to go on." },
           { status: 400 },
         );
       }
-      const questions = (parent.clarification_questions ?? []) as string[];
-      // The answers become part of the objective, so what the next run was
-      // told is exactly what is stored on it — no hidden second input.
-      objective = [
-        parent.objective,
-        "",
-        "Additional detail:",
-        ...answers.map((a, i) => (questions[i] ? `- ${questions[i]} ${a}` : `- ${a}`)),
-      ].join("\n");
     }
 
-    // The follow-up run keeps the parent's limits but never re-asks for
-    // approval of criteria that were just approved.
-    const limits = { ...parentLimits, require_icp_confirmation: seedIcp ? false : parentLimits.require_icp_confirmation };
+    // The run keeps its original budget ceiling across sessions: this session
+    // gets only what earlier ones left unspent.
+    const limits = RunLimitsSchema.parse(run.limits);
+    const spent = Number(run.total_cost_usd ?? 0);
+    const remaining = Number((limits.max_budget_usd - spent).toFixed(6));
+    if (remaining < MIN_SESSION_BUDGET_USD) {
+      return NextResponse.json(
+        { error: `This run has used $${spent.toFixed(2)} of its $${limits.max_budget_usd.toFixed(2)} budget — too little is left to continue.` },
+        { status: 402 },
+      );
+    }
 
     const budget = await budgetStatus();
     if (budget.runs_paused) {
       return NextResponse.json({ error: "New runs are paused by an administrator." }, { status: 503 });
     }
-    if (budget.agent_remaining_usd < limits.max_budget_usd) {
-      return NextResponse.json(
-        { error: `The shared model budget has $${budget.agent_remaining_usd.toFixed(2)} left, less than this run's cap.` },
-        { status: 402 },
-      );
-    }
-
-    const reservation = await reserveBudget("agent", limits.max_budget_usd, undefined, user.id, "continued run");
+    const reservation = await reserveBudget("agent", remaining, id, run.user_id, "run resumed");
     if (!reservation.ok) {
       return NextResponse.json({ error: `Could not reserve budget: ${reservation.reason}` }, { status: 402 });
     }
 
-    const { data: run, error } = await supabaseAdmin()
+    // Conditional on the status it was read in, so a double-click cannot
+    // resume the run twice and hold two reservations for one session.
+    const { data: resumed, error } = await db
       .from("runs")
-      .insert({
-        user_id: user.id,
-        objective,
-        icp: seedIcp,
-        limits,
+      .update({
         status: "queued",
-        parent_run_id: parent.id,
+        status_reason: null,
+        finished_at: null,
+        reserved_usd: remaining,
+        ...(run.status === "awaiting_confirmation" ? { icp_approved_at: new Date().toISOString() } : {}),
       })
+      .eq("id", id)
+      .eq("status", run.status)
       .select("id")
-      .single();
+      .maybeSingle();
 
-    if (error || !run) {
-      await releaseBudget("agent", limits.max_budget_usd, undefined, user.id, "continue insert failed");
-      return NextResponse.json({ error: `Could not create run: ${error?.message}` }, { status: 500 });
+    if (error || !resumed) {
+      await releaseBudget("agent", remaining, id, run.user_id, "resume did not apply");
+      return NextResponse.json(
+        { error: error ? `Could not resume: ${error.message}` : "This run was already resumed." },
+        { status: error ? 500 : 409 },
+      );
+    }
+
+    const actor = { id: user.id, email: user.email };
+    if (run.status === "awaiting_confirmation") {
+      await recordRunEvent(id, run.user_id, "approved", actor, {});
+    } else {
+      await recordRunEvent(id, run.user_id, "answered", actor, { answers: answeredPairs });
     }
 
     void pumpQueue();
-    return NextResponse.json({ runId: run.id }, { status: 202 });
+    return NextResponse.json({ runId: id }, { status: 202 });
   } catch (err) {
     const authResponse = authErrorResponse(err);
     if (authResponse) return authResponse;

@@ -15,11 +15,17 @@ export function RunActions({
   objective,
   live,
   hasQualified,
+  logOpen,
+  onToggleLog,
+  logCount,
 }: {
   runId: string;
   objective: string;
   live: boolean;
   hasQualified: boolean;
+  logOpen: boolean;
+  onToggleLog: () => void;
+  logCount: number;
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState<"cancel" | "delete" | null>(null);
@@ -47,6 +53,16 @@ export function RunActions({
   return (
     <div className="flex flex-col gap-2">
       <div className="flex flex-wrap items-center gap-2">
+        <button
+          type="button"
+          className={`btn btn-sm ${logOpen ? "btn-primary" : ""}`}
+          onClick={onToggleLog}
+          aria-expanded={logOpen}
+        >
+          Log
+          {logCount > 0 && <span style={{ opacity: 0.7 }}>{logCount}</span>}
+        </button>
+
         {live && (
           <ConfirmButton
             label="Cancel run"

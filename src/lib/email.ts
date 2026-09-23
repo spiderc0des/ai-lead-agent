@@ -94,12 +94,18 @@ export async function sendRunFinished(to: string, s: RunFinishedSummary): Promis
   const link = `${appUrl}/runs/${s.runId}`;
   const mins = s.durationMs ? `${(s.durationMs / 60000).toFixed(0)} min` : "—";
 
+  // A paused run is waiting on the reader, so it says that first — "your run
+  // needs_clarification" is status text, not a sentence anyone would send.
   const headline =
     s.status === "completed"
       ? `Your run found ${s.qualified} qualified lead${s.qualified === 1 ? "" : "s"}`
       : s.status === "needs_review"
         ? `Your run needs review — ${s.qualified} of ${s.targetLeads} qualified`
-        : `Your run ${s.status}`;
+        : s.status === "needs_clarification"
+          ? "Your run has a question for you"
+          : s.status === "awaiting_confirmation"
+            ? "Your run's criteria are ready for approval"
+            : `Your run ${s.status.replace(/_/g, " ")}`;
 
   const rows: [string, string][] = [
     ["Qualified", `${s.qualified} of ${s.targetLeads}`],
@@ -118,9 +124,13 @@ ${s.statusReason ? `<p style="margin:0 0 14px;padding:10px 12px;background:#fdf4
 <table role="presentation" cellpadding="0" cellspacing="0" style="font-size:14px;">
 ${rows.map(([k, v]) => `<tr><td style="padding:3px 16px 3px 0;color:#8a8578;">${escapeHtml(k)}</td><td style="padding:3px 0;font-weight:600;">${escapeHtml(v)}</td></tr>`).join("")}
 </table>
-<p style="margin:18px 0 0;font-size:13px;color:#8a8578;">Nothing has been sent to any company. The drafts are waiting for your review.</p>`,
+<p style="margin:18px 0 0;font-size:13px;color:#8a8578;">${
+      s.status === "needs_clarification" || s.status === "awaiting_confirmation"
+        ? "The run is paused. Nothing further is searched or spent until you reply."
+        : "Nothing has been sent to any company. The drafts are waiting for your review."
+    }</p>`,
     link,
-    "Review the run",
+    s.status === "needs_clarification" || s.status === "awaiting_confirmation" ? "Reply to the run" : "Review the run",
   );
 
   const text = [

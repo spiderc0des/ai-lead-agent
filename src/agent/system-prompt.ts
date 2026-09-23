@@ -70,27 +70,46 @@ These are enforced by the tools and by the database, not by you. When a tool ref
 Apify discovery draws on a small budget shared with every other user of this app. Spend it as if it were someone else's, because partly it is.`;
 }
 
-/** The opening user message that kicks off a run. */
-export function buildPrompt(objective: string, icpAlreadyApproved = false): string {
-  if (icpAlreadyApproved) {
-    // A run continued from an approved ICP. Refining again would be busywork
-    // at best and would quietly change the agreed criteria at worst.
-    return `Qualification objective:
+/** The opening user message that kicks off a session of a run. */
+export function buildPrompt(
+  objective: string,
+  opts: {
+    icpAlreadyApproved?: boolean;
+    answers?: { question: string; answer: string }[];
+  } = {},
+): string {
+  const { icpAlreadyApproved = false, answers = [] } = opts;
+
+  const header = `Qualification objective:
 
 """
 ${objective}
-"""
+"""`;
 
-The ICP for this run has already been written and approved by the person, and is recorded against the run. Do NOT call set_icp and do NOT refine it again — the criteria are settled.
+  // The person's replies to earlier clarification questions. Kept apart from
+  // the objective so the original wording is never rewritten, and so the run
+  // log can show both.
+  const replies = answers.length
+    ? `
+
+Earlier in this run you stopped to ask for clarification. The person replied:
+
+${answers.map((a) => `- ${a.question}\n  -> ${a.answer}`).join("\n")}
+
+Treat these replies as part of the objective: anything stated here is a user_stated constraint.`
+    : "";
+
+  if (icpAlreadyApproved) {
+    // Resumed after approval. Refining again would be busywork at best and
+    // would quietly change the agreed criteria at worst — set_icp refuses it.
+    return `${header}${replies}
+
+This run is resuming. Its ICP was written in an earlier session and the person has APPROVED it; it is recorded against the run. Do NOT call set_icp — the criteria are settled.
 
 Read them with get_run_state, then start at discovery and continue until you have called finalize_run.`;
   }
 
-  return `Qualification objective:
-
-"""
-${objective}
-"""
+  return `${header}${replies}
 
 Work through the phases in your instructions. Start by invoking the icp-refinement skill. Then take ONE of two paths: either call set_icp and continue until you have called finalize_run, or — if the objective cannot be searched as given — call request_clarification and stop there.`;
 }

@@ -9,6 +9,7 @@ import { RunActions } from "@/components/RunActions";
 import { type Draft } from "@/components/OutreachCard";
 import { LeadList } from "@/components/LeadList";
 import { RunResponse } from "@/components/RunResponse";
+import { RunLog, type RunEvent } from "@/components/RunLog";
 import type { Icp, RunLimits } from "@/lib/schemas";
 
 type Run = {
@@ -43,6 +44,8 @@ export function RunView({ runId }: { runId: string }) {
   const [sources, setSources] = useState<PageSource[]>([]);
   const [drafts, setDrafts] = useState<Draft[]>([]);
   const [candidateCount, setCandidateCount] = useState(0);
+  const [events, setEvents] = useState<RunEvent[]>([]);
+  const [logOpen, setLogOpen] = useState(false);
 
   const refetchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const statusRef = useRef<string | null>(null);
@@ -50,13 +53,14 @@ export function RunView({ runId }: { runId: string }) {
   const load = useCallback(async () => {
     // Every read is filtered by RLS, not by application code: the anon key
     // returns this user's rows only, so an unauthorised id comes back empty.
-    const [r, l, t, s, d, c] = await Promise.all([
+    const [r, l, t, s, d, c, ev] = await Promise.all([
       supabase.from("runs").select("*").eq("id", runId).maybeSingle(),
       supabase.from("leads").select("*").eq("run_id", runId).order("confidence", { ascending: false }),
       supabase.from("tool_calls").select("*").eq("run_id", runId).order("created_at"),
       supabase.from("page_sources").select("*").eq("run_id", runId).order("scraped_at"),
       supabase.from("outreach_drafts").select("*").eq("run_id", runId),
       supabase.from("candidates").select("id", { count: "exact", head: true }).eq("run_id", runId),
+      supabase.from("run_events").select("id, kind, actor_email, detail, created_at").eq("run_id", runId).order("created_at"),
     ]);
     const nextRun = (r.data as Run) ?? null;
     statusRef.current = nextRun?.status ?? null;
@@ -66,6 +70,7 @@ export function RunView({ runId }: { runId: string }) {
     setSources((s.data as PageSource[]) ?? []);
     setDrafts((d.data as Draft[]) ?? []);
     setCandidateCount(c.count ?? 0);
+    setEvents((ev.data as RunEvent[]) ?? []);
   }, [supabase, runId]);
 
   const scheduleRefetch = useCallback(() => {
@@ -75,7 +80,7 @@ export function RunView({ runId }: { runId: string }) {
 
   useEffect(() => {
     const channel = supabase.channel(`run:${runId}`);
-    for (const table of ["runs", "leads", "tool_calls", "page_sources", "outreach_drafts", "candidates"]) {
+    for (const table of ["runs", "leads", "tool_calls", "page_sources", "outreach_drafts", "candidates", "run_events"]) {
       channel.on("postgres_changes", {
         event: "*", schema: "public", table,
         filter: table === "runs" ? `id=eq.${runId}` : `run_id=eq.${runId}`,
@@ -122,7 +127,17 @@ export function RunView({ runId }: { runId: string }) {
         </span>
       </div>
 
-      <RunActions runId={runId} objective={run.objective} live={live} hasQualified={qualified.length > 0} />
+      <RunActions
+        runId={runId}
+        objective={run.objective}
+        live={live || run.status === "needs_clarification" || run.status === "awaiting_confirmation"}
+        hasQualified={qualified.length > 0}
+        logOpen={logOpen}
+        onToggleLog={() => setLogOpen((o) => !o)}
+        logCount={events.length}
+      />
+
+      {logOpen && <RunLog objective={run.objective} events={events} />}
 
       {/* One panel. The reason and the questions were two, which said the same
           thing twice before offering anything to do about it. */}

@@ -88,6 +88,22 @@ export function buildLeadTools(ctx: RunContext) {
       withLogging(ctx, "set_icp", "Record refined ICP before searching", args, async () => {
         const icp = IcpSchema.parse(args);
 
+        const { data: current } = await supabaseAdmin()
+          .from("runs")
+          .select("icp_approved_at")
+          .eq("id", ctx.runId)
+          .single();
+        // Approved criteria are what the person signed off on. Letting a later
+        // session rewrite them would make the approval meaningless.
+        if (current?.icp_approved_at) {
+          return {
+            result: errorResult(
+              `The ICP for this run was approved by the person and cannot be changed. ` +
+                `Read it with get_run_state and continue from discovery.`,
+            ),
+          };
+        }
+
         // An empty user_stated IS the "no signal" condition, by definition:
         // nothing in the objective survived into the criteria, so the ICP is
         // authored rather than inferred. Enforced here rather than left to the
@@ -812,7 +828,24 @@ export function buildLeadTools(ctx: RunContext) {
         const byStatus = (s: string) =>
           (leads ?? []).filter((l) => l.qualification_status === s).map((l) => l.company_domain);
 
+        // A resumed session starts here, so the settled criteria must be
+        // readable from this call — the session itself remembers nothing.
+        const { data: runRow } = await supabaseAdmin()
+          .from("runs")
+          .select("icp, icp_approved_at")
+          .eq("id", ctx.runId)
+          .single();
+        const icp = runRow?.icp as Record<string, unknown> | null;
+        const icpLines = icp
+          ? [
+              `ICP ${runRow?.icp_approved_at ? "(APPROVED by the person — do not change it)" : "(recorded)"}:`,
+              JSON.stringify(icp, null, 2),
+              ``,
+            ]
+          : [`No ICP recorded yet.`, ``];
+
         const lines = [
+          ...icpLines,
           `Limits used:`,
           `  candidates ${counters.candidates}/${ctx.limits.max_candidates} (${counters.remainingCandidates} left)`,
           `  scrapes    ${counters.scrapes}/${ctx.limits.max_scrapes} (${counters.remainingScrapes} left)`,

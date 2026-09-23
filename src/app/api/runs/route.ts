@@ -5,6 +5,7 @@ import { CreateRunSchema, DEFAULT_LIMITS, RunLimitsSchema } from "@/lib/schemas"
 import { budgetStatus, reserveBudget, releaseBudget } from "@/agent/budget";
 import { pumpQueue } from "@/agent/queue";
 import { APIFY_MIN_RUN_CHARGE_USD } from "@/lib/apify";
+import { recordRunEvent } from "@/lib/run-events";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -105,6 +106,7 @@ export async function POST(request: Request) {
         objective: parsed.data.objective.trim(),
         limits,
         status: "queued",
+        reserved_usd: limits.max_budget_usd,
       })
       .select("id")
       .single();
@@ -116,6 +118,12 @@ export async function POST(request: Request) {
         { status: 500 },
       );
     }
+
+    await recordRunEvent(run.id, user.id, "created", { id: user.id, email: user.email }, {
+      objective: parsed.data.objective.trim(),
+      require_icp_confirmation: limits.require_icp_confirmation,
+      max_budget_usd: limits.max_budget_usd,
+    });
 
     // Starts immediately if a worker slot is free, otherwise the run waits.
     void pumpQueue();

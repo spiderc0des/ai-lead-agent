@@ -300,6 +300,24 @@ async function main() {
       await db.from("runs").delete().eq("id", gated!.id);
     }
 
+    /* --------------------------------------- an approved ICP is locked -- */
+    console.log("\n== an approved ICP cannot be rewritten ==");
+    {
+      const { error: colErr } = await db.from("runs").update({ icp_approved_at: new Date().toISOString() }).eq("id", run.id);
+      if (colErr) {
+        console.log("  SKIP approved-ICP lock — run supabase/migrations/0006_run_log.sql first");
+        skipped += 2;
+      } else {
+        const r = await call("set_icp", { ...fullIcp, industries: ["something else entirely"] });
+        check("set_icp refuses once the ICP is approved", r.isError === true && /approved/.test(text(r)), text(r).slice(0, 140));
+
+        const st = await call("get_run_state", {});
+        check("  get_run_state shows it as approved, for a resumed session", /APPROVED/.test(text(st)), text(st).slice(0, 160));
+
+        await db.from("runs").update({ icp_approved_at: null }).eq("id", run.id);
+      }
+    }
+
     /* -------------------------------------------- request_clarification -- */
     console.log("\n== request_clarification ==");
     {

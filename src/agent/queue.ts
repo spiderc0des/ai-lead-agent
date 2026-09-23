@@ -136,7 +136,7 @@ export async function sweepOrphanedRuns(): Promise<number> {
 
   const { data: stale } = await supabaseAdmin()
     .from("runs")
-    .select("id, user_id, limits, heartbeat_at, started_at, total_cost_usd")
+    .select("id, user_id, limits, heartbeat_at, started_at, total_cost_usd, reserved_usd, session_baseline_usd")
     .eq("status", "running");
 
   if (!stale?.length) return 0;
@@ -154,6 +154,7 @@ export async function sweepOrphanedRuns(): Promise<number> {
         status_reason:
           "The server restarted while this run was in progress. Partial results are still stored.",
         finished_at: new Date().toISOString(),
+        reserved_usd: 0,
       })
       .eq("id", run.id)
       .eq("status", "running")
@@ -162,14 +163,20 @@ export async function sweepOrphanedRuns(): Promise<number> {
 
     if (updated?.id) {
       reclaimed++;
-      const reserved = (run.limits as { max_budget_usd?: number })?.max_budget_usd ?? 0;
+      // What the crashed SESSION held and spent. A resumed run's earlier
+      // sessions were already settled, so only the increment since the last
+      // baseline belongs to this one.
+      const reserved = Number(run.reserved_usd ?? 0);
       if (reserved > 0) {
         // A crashed run still spent real money. Releasing the whole
         // reservation, as this used to, wrote that spend off entirely and left
         // the shared pool over-reporting what was left. The live estimate the
         // stream keeps is a floor rather than the true figure, but settling a
         // floor is strictly better accounting than settling zero.
-        const spentSoFar = Number(run.total_cost_usd ?? 0);
+        const spentSoFar = Math.max(
+          0,
+          Number(run.total_cost_usd ?? 0) - Number(run.session_baseline_usd ?? 0),
+        );
         await settleBudget(
           "agent",
           reserved,

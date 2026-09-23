@@ -4,6 +4,7 @@ import { supabaseAdmin } from "@/lib/supabase/admin";
 import { cancelRun } from "@/agent/run-agent";
 import { releaseBudget } from "@/agent/budget";
 import { pumpQueue } from "@/agent/queue";
+import { recordRunEvent } from "@/lib/run-events";
 
 export const runtime = "nodejs";
 
@@ -14,7 +15,7 @@ export async function POST(_request: Request, ctx: { params: Promise<{ id: strin
 
     const { data: run } = await supabaseAdmin()
       .from("runs")
-      .select("id, user_id, status, limits")
+      .select("id, user_id, status, limits, reserved_usd")
       .eq("id", id)
       .maybeSingle();
 
@@ -25,9 +26,15 @@ export async function POST(_request: Request, ctx: { params: Promise<{ id: strin
     if (run.user_id !== user.id && user.role !== "admin") {
       return NextResponse.json({ error: "Not your run" }, { status: 403 });
     }
-    if (!["queued", "running"].includes(run.status)) {
+    if (!["queued", "running", "needs_clarification", "awaiting_confirmation"].includes(run.status)) {
       return NextResponse.json({ error: `Run is already ${run.status}` }, { status: 409 });
     }
+
+    // Logged before the abort, so the event carries who did it. The runner sees
+    // a person-initiated cancel and does not log a second, actorless one.
+    await recordRunEvent(id, run.user_id, "cancelled", { id: user.id, email: user.email }, {
+      was: run.status,
+    });
 
     const wasRunning = cancelRun(id);
 
@@ -37,15 +44,18 @@ export async function POST(_request: Request, ctx: { params: Promise<{ id: strin
         .from("runs")
         .update({
           status: "cancelled",
-          status_reason: "Cancelled before the agent started.",
+          status_reason: `Cancelled by ${user.email}.`,
           finished_at: new Date().toISOString(),
         })
         .eq("id", id)
-        .in("status", ["queued", "running"]);
+        .in("status", ["queued", "running", "needs_clarification", "awaiting_confirmation"]);
 
-      const reserved = (run.limits as { max_budget_usd?: number })?.max_budget_usd ?? 0;
+      // Release what this run actually holds — for a resumed run that is
+      // less than max_budget_usd.
+      const reserved = Number(run.reserved_usd ?? 0);
       if (reserved > 0) {
         await releaseBudget("agent", reserved, id, run.user_id, "cancelled before start");
+        await supabaseAdmin().from("runs").update({ reserved_usd: 0 }).eq("id", id);
       }
       void pumpQueue();
     }

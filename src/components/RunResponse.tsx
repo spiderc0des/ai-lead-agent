@@ -6,10 +6,8 @@ import { useRouter } from "next/navigation";
 /**
  * The reply to a run that stopped waiting on a person.
  *
- * Answering starts a NEW run linked to this one rather than resuming it. The
- * agent session is not persisted so there is nothing to resume, and keeping
- * the original intact is the better record anyway: it still shows what was
- * asked and what was not yet approved.
+ * Answering resumes THIS run. The replies are recorded in its log with who
+ * gave them, and the agent picks up with everything the run already found.
  */
 export function RunResponse({
   runId,
@@ -39,7 +37,8 @@ export function RunResponse({
       setError(body.error ?? `Could not continue (${res.status}).`);
       return;
     }
-    router.push(`/runs/${body.runId}`);
+    // Same run: refresh in place rather than navigating away.
+    router.refresh();
   }
 
   if (mode === "confirm") {
@@ -47,12 +46,11 @@ export function RunResponse({
       <div className="panel panel-info">
         <p className="font-medium">These criteria are waiting for your approval.</p>
         <p className="hint">
-          Nothing has been searched or scraped yet. Approving starts the run properly; if the
-          criteria are wrong, start a new run with a clearer objective instead.
+          Nothing has been searched yet. Approving resumes this run from discovery.
         </p>
         <div className="mt-3 flex flex-wrap items-center gap-2">
           <button type="button" className="btn btn-primary btn-sm" disabled={busy} onClick={submit}>
-            {busy ? "Starting…" : "Approve and run"}
+            {busy ? "Resuming…" : "Approve and continue"}
           </button>
           <a className="btn btn-sm no-underline" href="/new">
             Start over instead
@@ -68,8 +66,7 @@ export function RunResponse({
   return (
     <div className="panel panel-info">
       <p className="font-medium">
-        The agent stopped before spending anything. Answer what you can and it will pick up from
-        there.
+        The agent needs a little more before it searches. Answer what you can.
       </p>
 
       <div className="mt-3 space-y-3">
@@ -100,12 +97,12 @@ export function RunResponse({
           disabled={busy || answered === 0}
           onClick={submit}
         >
-          {busy ? "Starting…" : "Continue with these answers"}
+          {busy ? "Resuming…" : "Continue the run"}
         </button>
         <span className="hint">
           {answered === 0
             ? "Answer at least one to continue."
-            : `Starts a new run linked to this one. ${answered} of ${questions.length} answered.`}
+            : `${answered} of ${questions.length} answered.`}
         </span>
       </div>
 

@@ -25,7 +25,7 @@ export async function DELETE(_request: Request, ctx: { params: Promise<{ id: str
 
     const { data: run } = await supabaseAdmin()
       .from("runs")
-      .select("id, user_id, status, limits")
+      .select("id, user_id, status, limits, reserved_usd")
       .eq("id", id)
       .maybeSingle();
 
@@ -39,7 +39,7 @@ export async function DELETE(_request: Request, ctx: { params: Promise<{ id: str
 
     if (run.status === "running" || run.status === "queued") {
       cancelRun(id);
-      const reserved = (run.limits as { max_budget_usd?: number })?.max_budget_usd ?? 0;
+      const reserved = Number(run.reserved_usd ?? 0);
       if (reserved > 0) {
         await releaseBudget("agent", reserved, undefined, run.user_id, "run deleted while active");
       }
