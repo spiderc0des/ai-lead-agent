@@ -13,7 +13,8 @@ import {
   assertPublicHttpUrl,
 } from "@/lib/domain";
 import { CreateRunSchema, RunLimitsSchema, DEFAULT_LIMITS } from "@/lib/schemas";
-import { composeObjective, answersFromEvents } from "@/lib/objective";
+import { composeObjective, answersFromEvents, leadCountFromObjective } from "@/lib/objective";
+import { deriveMaxTurns } from "@/lib/schemas";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 
@@ -183,6 +184,31 @@ console.log("\n== limits stored by older versions still load ==");
   check("a pre-gate run's limits parse", r.success, r.success ? undefined : r.error.issues);
   check("  and read as not gated", r.success && r.data.require_icp_confirmation === false);
   check("new runs still default to gated", DEFAULT_LIMITS.require_icp_confirmation === true);
+}
+
+console.log("\n== lead count read from the objective ==");
+{
+  const cases: [string, number | null][] = [
+    ["Find 10 US B2B SaaS companies with 10 to 100 employees that may need AI automation support.", 10],
+    ["Find 5 US legal tech companies with 10 to 50 employees still doing manual client intake.", 5],
+    ["Get me 20 agencies in Texas", 20],
+    ["give me up to 15 leads in fintech", 15],
+    ["us business", null],
+    ["B2B SaaS companies; United states; 10 to 50; need AI automation support", null],
+    ["find 10-50 employee companies in Ohio", null],
+    ["companies with 50 employees in healthcare", null],
+  ];
+  for (const [o, want] of cases) {
+    const got = leadCountFromObjective(o);
+    check(`${JSON.stringify(o).slice(0, 60)} -> ${want}`, got === want, got);
+  }
+}
+
+console.log("\n== derived turn cap ==");
+{
+  check("default run gets a workable turn cap", deriveMaxTurns({ max_scrapes: 60, max_leads: 10 }) === 150, deriveMaxTurns({ max_scrapes: 60, max_leads: 10 }));
+  check("never below 40", deriveMaxTurns({ max_scrapes: 1, max_leads: 1 }) === 40);
+  check("never above the schema's 200", deriveMaxTurns({ max_scrapes: 200, max_leads: 50 }) === 200);
 }
 
 console.log("\n== the working objective ==");

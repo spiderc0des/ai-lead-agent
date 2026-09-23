@@ -76,6 +76,37 @@ async function assertRunIsSpendable(runId: string): Promise<string | null> {
  * server-side invariant; none of them needs an agent to exercise.
  */
 
+/**
+ * Budget wind-down.
+ *
+ * The model budget is a HARD stop: crossing it kills the session mid-thought,
+ * before finalize_run, so the run ends `failed` with no drafts and no quality
+ * check. While the scrape cap sat well below the budget it kept runs clear of
+ * that; with scrapes now following the candidate count, spend is what runs out
+ * first. So past a threshold the research tools refuse — a SOFT stop the agent
+ * adapts to — and it goes on to qualify, draft and finalize with what it has.
+ *
+ * Measured against the live cost, which is a floor: output tokens are only
+ * counted at the end, and were about a third of a real run's bill. So 50% on
+ * the floor is roughly 75% of the true spend, leaving the rest for drafting.
+ */
+const WIND_DOWN_WARN = 0.4;
+const WIND_DOWN_STOP = 0.5;
+
+async function spendRatio(ctx: RunContext): Promise<{ ratio: number; spent: number }> {
+  const { data } = await supabaseAdmin().from("runs").select("total_cost_usd").eq("id", ctx.runId).single();
+  const spent = Number(data?.total_cost_usd ?? 0);
+  return { ratio: spent / ctx.limits.max_budget_usd, spent };
+}
+
+function windDownRefusal(spent: number, ctx: RunContext): LimitError {
+  return new LimitError(
+    `This run has used about $${spent.toFixed(2)} of its $${ctx.limits.max_budget_usd.toFixed(2)} budget, ` +
+      `so research is closed to leave enough for the rest. Do not discover or scrape any more: ` +
+      `qualify the companies you have evidence for, write their outreach drafts, and call finalize_run.`,
+  );
+}
+
 /** URL identity for "have we already fetched this?": scheme, www, trailing slash and fragment ignored. */
 function normUrl(raw: string): string {
   try {
@@ -136,12 +167,12 @@ async function scrapeAndStore(ctx: RunContext, rawUrl: string, candidateId: stri
 }
 
 /**
- * Homepages fetched while a discovery call is still searching. Capped per
- * call and at half the remaining scrape budget, so the agent always keeps
- * room for the about, pricing and careers pages that actually decide fit.
+ * Every discovered company's homepage is fetched while discovery is still
+ * searching, up to whatever scrape budget remains. The scrape limit defaults
+ * to the candidate limit, so by default every candidate is read once; setting
+ * it higher leaves room for the about, pricing and careers pages.
  */
-const PREFETCH_PER_CALL = 6;
-const PREFETCH_CONCURRENCY = 3;
+const PREFETCH_CONCURRENCY = 4;
 
 export function buildLeadTools(ctx: RunContext) {
   /* ------------------------------------------------------------- set_icp -- */
@@ -313,6 +344,9 @@ export function buildLeadTools(ctx: RunContext) {
           };
         }
 
+        const spend = await spendRatio(ctx);
+        if (spend.ratio >= WIND_DOWN_STOP) throw windDownRefusal(spend.spent, ctx);
+
         const counters = await readCounters(ctx);
         if (counters.remainingCandidates <= 0) {
           throw new LimitError(
@@ -363,7 +397,7 @@ export function buildLeadTools(ctx: RunContext) {
 
         // Homepages are fetched WHILE discovery keeps searching, instead of
         // waiting for it to finish and then spending another turn to ask.
-        const prefetchCap = Math.min(PREFETCH_PER_CALL, Math.floor(counters.remainingScrapes / 2));
+        const prefetchCap = counters.remainingScrapes;
         const runLimited = limiter(PREFETCH_CONCURRENCY);
         const prefetched = new Map<string, Stored | { failed: string }>();
         const prefetches: Promise<void>[] = [];
@@ -549,8 +583,15 @@ export function buildLeadTools(ctx: RunContext) {
           );
         }
 
-        // Never start more fetches than the budget can pay for.
-        const urls = needFetch.slice(0, counters.remainingScrapes);
+        const spend = await spendRatio(ctx);
+        if (spend.ratio >= WIND_DOWN_STOP && needFetch.length > 0 && fromStore.length === 0) {
+          throw windDownRefusal(spend.spent, ctx);
+        }
+
+        // Never start more fetches than the budget can pay for — or any, once
+        // the run is winding down. Stored pages are still served: they cost
+        // no scrape, only the reading.
+        const urls = spend.ratio >= WIND_DOWN_STOP ? [] : needFetch.slice(0, counters.remainingScrapes);
         const skippedForBudget = needFetch.length - urls.length;
 
         const settled = await Promise.allSettled(
@@ -961,9 +1002,18 @@ export function buildLeadTools(ctx: RunContext) {
             ]
           : [`No ICP recorded yet.`, ``];
 
+        const spend = await spendRatio(ctx);
+        const spendLine =
+          spend.ratio >= WIND_DOWN_STOP
+            ? `  spend      about $${spend.spent.toFixed(2)} of $${ctx.limits.max_budget_usd.toFixed(2)} — RESEARCH CLOSED: qualify, draft and finalize now`
+            : spend.ratio >= WIND_DOWN_WARN
+              ? `  spend      about $${spend.spent.toFixed(2)} of $${ctx.limits.max_budget_usd.toFixed(2)} — nearly at the point research closes; start qualifying and drafting`
+              : `  spend      about $${spend.spent.toFixed(2)} of $${ctx.limits.max_budget_usd.toFixed(2)}`;
+
         const lines = [
           ...icpLines,
           `Limits used:`,
+          spendLine,
           `  candidates ${counters.candidates}/${ctx.limits.max_candidates} (${counters.remainingCandidates} left)`,
           `  scrapes    ${counters.scrapes}/${ctx.limits.max_scrapes} (${counters.remainingScrapes} left)`,
           `  qualified  ${counters.qualified}/${ctx.limits.max_leads} (${counters.remainingQualified} still needed)`,

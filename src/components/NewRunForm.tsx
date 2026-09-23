@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { DEFAULT_LIMITS, type RunLimits } from "@/lib/schemas";
+import { leadCountFromObjective } from "@/lib/objective";
 
 type Budget = {
   apify_remaining_usd: number;
@@ -34,25 +35,25 @@ const LIMIT_FIELDS = [
   {
     key: "max_scrapes",
     label: "Scrapes",
-    help: "Pages that may be read. The main driver of run time and Firecrawl credits.",
+    help:
+      "Pages that may be read. Follows Candidates unless you change it, so every discovered " +
+      "company's homepage is read; set it higher to leave room for about, pricing and careers pages.",
     stop: "soft",
   },
   {
     key: "max_leads",
     label: "Qualified leads",
-    help: "How many may be saved as qualified. Rejections are unlimited.",
+    help:
+      "How many may be saved as qualified. Filled in from your objective (\"find 10…\") " +
+      "unless you change it — and if the two disagree, this field wins. Rejections are unlimited.",
     stop: "soft",
-  },
-  {
-    key: "max_turns",
-    label: "Agent turns",
-    help: "Model round trips, tool calls included.",
-    stop: "hard",
   },
   {
     key: "max_budget_usd",
     label: "Model budget ($)",
-    help: "Ceiling for this run. Reserved from the shared pool while it runs.",
+    help:
+      "Ceiling for this run, reserved from the shared pool while it runs. Research closes at " +
+      "about half of it so the rest pays for drafting and finishing.",
     stop: "hard",
   },
 ] as const;
@@ -68,6 +69,28 @@ export function NewRunForm({
   const router = useRouter();
   const [objective, setObjective] = useState("");
   const [limits, setLimits] = useState<RunLimits>(DEFAULT_LIMITS);
+  // A field follows its source (candidates -> scrapes, objective -> leads)
+  // until the person edits it; after that their number stands.
+  const [touched, setTouched] = useState<{ max_scrapes?: boolean; max_leads?: boolean }>({});
+  const askedFor = leadCountFromObjective(objective);
+  const leadsDisagree = askedFor !== null && askedFor !== limits.max_leads;
+
+  function updateObjective(next: string) {
+    setObjective(next);
+    const n = leadCountFromObjective(next);
+    if (n !== null && !touched.max_leads) {
+      setLimits((l) => ({ ...l, max_leads: Math.min(50, n) }));
+    }
+  }
+
+  function updateLimit(key: keyof RunLimits, value: number) {
+    setLimits((l) => {
+      const next = { ...l, [key]: value };
+      if (key === "max_candidates" && !touched.max_scrapes) next.max_scrapes = Math.min(200, value);
+      return next;
+    });
+    if (key === "max_scrapes" || key === "max_leads") setTouched((t) => ({ ...t, [key]: true }));
+  }
   const [showLimits, setShowLimits] = useState(false);
   const [budget, setBudget] = useState<Budget | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -112,7 +135,7 @@ export function NewRunForm({
 
       <textarea
         value={objective}
-        onChange={(e) => setObjective(e.target.value)}
+        onChange={(e) => updateObjective(e.target.value)}
         rows={3}
         required
         minLength={10}
@@ -121,7 +144,7 @@ export function NewRunForm({
       />
       <button
         type="button"
-        onClick={() => setObjective(EXAMPLE)}
+        onClick={() => updateObjective(EXAMPLE)}
         className="btn btn-ghost btn-sm mt-1 px-0"
       >
         use the example objective
@@ -164,9 +187,7 @@ export function NewRunForm({
                   type="number"
                   step={key === "max_budget_usd" ? "0.25" : "1"}
                   value={limits[key]}
-                  onChange={(e) =>
-                    setLimits({ ...limits, [key]: Number(e.target.value) })
-                  }
+                  onChange={(e) => updateLimit(key, Number(e.target.value))}
                   className="field mt-1"
                 />
                 <span className="hint block">
@@ -180,6 +201,13 @@ export function NewRunForm({
           </div>
         )}
       </div>
+
+      {leadsDisagree && (
+        <p className="panel panel-warning mt-4">
+          Your objective asks for {askedFor}, but Qualified leads is set to {limits.max_leads}.
+          The run will stop at {limits.max_leads} — change the field if you meant {askedFor}.
+        </p>
+      )}
 
       {budget && (
         <p className="hint mt-4">

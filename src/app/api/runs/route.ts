@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireUser, authErrorResponse } from "@/lib/auth";
 import { supabaseAdmin } from "@/lib/supabase/admin";
-import { CreateRunSchema, DEFAULT_LIMITS, RunLimitsSchema } from "@/lib/schemas";
+import { CreateRunSchema, DEFAULT_LIMITS, RunLimitsSchema, deriveMaxTurns } from "@/lib/schemas";
 import { budgetStatus, reserveBudget, releaseBudget } from "@/agent/budget";
 import { pumpQueue } from "@/agent/queue";
 import { APIFY_MIN_RUN_CHARGE_USD } from "@/lib/apify";
@@ -33,7 +33,10 @@ export async function POST(request: Request) {
       );
     }
 
-    const limits = RunLimitsSchema.parse({ ...DEFAULT_LIMITS, ...parsed.data.limits });
+    const merged = { ...DEFAULT_LIMITS, ...parsed.data.limits };
+    // Turns are derived, never taken from the request: the form no longer
+    // shows the field, and a crafted request should not be able to set it.
+    const limits = RunLimitsSchema.parse({ ...merged, max_turns: deriveMaxTurns(merged) });
 
     // A per-person cap on active runs, set by an admin: the worker pool is
     // shared, and one person queueing ten runs would starve everyone else.

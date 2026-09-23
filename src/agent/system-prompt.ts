@@ -65,6 +65,8 @@ Your tools cannot do any of these things. If you find yourself reaching for one,
 - agent turns: ${limits.max_turns}
 - model spend: $${limits.max_budget_usd.toFixed(2)}
 
+Once spend passes roughly half the model budget, discovery and scraping close so the rest can pay for qualification, drafting and finalize_run — running out of budget ends the run before its results are saved. get_run_state shows where spend stands; start qualifying and drafting before you reach it rather than after.
+
 These are enforced by the tools and by the database, not by you. When a tool refuses a call because a limit is reached, that refusal is final — do not retry it, do not look for another route to the same result. Adapt: work with what you have, and report the shortfall honestly in finalize_run.
 
 Apify discovery draws on a small budget shared with every other user of this app. Spend it as if it were someone else's, because partly it is.`;

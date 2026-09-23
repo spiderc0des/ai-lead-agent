@@ -11,7 +11,7 @@ export const RunLimitsSchema = z.object({
   /** Candidate companies that may enter the discovery pool. */
   max_candidates: z.number().int().min(1).max(200),
   /** Websites that may be scraped. */
-  max_scrapes: z.number().int().min(1).max(100),
+  max_scrapes: z.number().int().min(1).max(200),
   /** Leads that may be saved with status `qualified`. */
   max_leads: z.number().int().min(1).max(50),
   /** Agent turns (tool-use round trips). */
@@ -41,17 +41,26 @@ export const RunLimitsSchema = z.object({
 export type RunLimits = z.infer<typeof RunLimitsSchema>;
 
 /**
- * Defaults tuned from the first real run, which spent $0.85 and 54 of 60 turns
- * while reaching only 14 companies and one qualified lead. Verifying a
- * headcount filter from public pages rejects most candidates, so the pool has
- * to be several times the target and the turn budget has to leave room for
- * drafting after all that qualification.
+ * The turn cap is no longer a form field — it is a runaway guard, not a
+ * choice anyone should have to make — so it is derived from the work the run
+ * is allowed to do. Roughly: a turn per scrape batch and per qualification, a
+ * few for drafting, plus headroom; capped at the schema maximum. The
+ * outreach-safety guide requires a turn limit, so it stays enforced.
+ */
+export function deriveMaxTurns(limits: Pick<RunLimits, "max_scrapes" | "max_leads">): number {
+  return Math.min(200, Math.max(40, 30 + Math.ceil(limits.max_scrapes * 1.5) + limits.max_leads * 3));
+}
+
+/**
+ * Defaults tuned from real runs: verifying a headcount filter from public pages
+ * rejects most candidates, so the pool has to be several times the target.
  */
 export const DEFAULT_LIMITS: RunLimits = {
   max_candidates: 60,
-  max_scrapes: 45,
+  // Follows the candidate limit by default: every discovered company is read.
+  max_scrapes: 60,
   max_leads: 10,
-  max_turns: 140,
+  max_turns: deriveMaxTurns({ max_scrapes: 60, max_leads: 10 }),
   max_budget_usd: 3,
   wall_clock_ms: 30 * 60 * 1000,
   require_icp_confirmation: true,

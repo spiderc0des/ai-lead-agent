@@ -318,6 +318,29 @@ async function main() {
       }
     }
 
+    /* ------------------------------------------------ budget wind-down -- */
+    console.log("\n== research closes near the budget, finishing does not ==");
+    {
+      await db.from("runs").update({ total_cost_usd: limits.max_budget_usd * 0.55 }).eq("id", run.id);
+
+      const d = await call("discover_companies", { queries: ["helpdesk software"], purpose: "should be refused" });
+      check("discovery refused past the wind-down line", d.isError === true && /research is closed/.test(text(d)), text(d).slice(0, 140));
+
+      const fresh = await call("scrape_websites", { urls: ["https://www.iana.org/about"], purpose: "should be refused" });
+      check("  new scrapes refused", /research is closed/.test(text(fresh)), text(fresh).slice(0, 140));
+
+      const { data: pages } = await db.from("page_sources").select("url").eq("run_id", run.id).limit(1);
+      if (pages?.length) {
+        const stored = await call("scrape_websites", { urls: [pages[0].url], purpose: "stored page" });
+        check("  but a page already fetched is still served", /served from earlier/.test(text(stored)), text(stored).slice(0, 140));
+      }
+
+      const st = await call("get_run_state", {});
+      check("  get_run_state tells the agent to finish", /RESEARCH CLOSED/.test(text(st)), text(st).slice(0, 200));
+
+      await db.from("runs").update({ total_cost_usd: 0 }).eq("id", run.id);
+    }
+
     /* -------------------------------------------- request_clarification -- */
     console.log("\n== request_clarification ==");
     {
