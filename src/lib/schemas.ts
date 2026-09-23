@@ -20,6 +20,16 @@ export const RunLimitsSchema = z.object({
   max_budget_usd: z.number().min(0.05).max(25),
   /** Wall-clock ceiling; the run is aborted past this. */
   wall_clock_ms: z.number().int().min(60_000).max(3_600_000),
+
+  /**
+   * Stop after the ICP and wait for a person to approve it, before any
+   * discovery or scraping happens.
+   *
+   * The ICP pass costs about $0.05; a full run costs $0.70 to $1.20. Checking
+   * the criteria first is cheap insurance against spending the latter on a
+   * misreading of the objective.
+   */
+  require_icp_confirmation: z.boolean(),
 });
 
 export type RunLimits = z.infer<typeof RunLimitsSchema>;
@@ -38,6 +48,7 @@ export const DEFAULT_LIMITS: RunLimits = {
   max_turns: 140,
   max_budget_usd: 3,
   wall_clock_ms: 30 * 60 * 1000,
+  require_icp_confirmation: true,
 };
 
 /* -------------------------------------------------------------------------

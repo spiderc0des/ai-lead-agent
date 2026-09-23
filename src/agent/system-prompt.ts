@@ -71,7 +71,21 @@ Apify discovery draws on a small budget shared with every other user of this app
 }
 
 /** The opening user message that kicks off a run. */
-export function buildPrompt(objective: string): string {
+export function buildPrompt(objective: string, icpAlreadyApproved = false): string {
+  if (icpAlreadyApproved) {
+    // A run continued from an approved ICP. Refining again would be busywork
+    // at best and would quietly change the agreed criteria at worst.
+    return `Qualification objective:
+
+"""
+${objective}
+"""
+
+The ICP for this run has already been written and approved by the person, and is recorded against the run. Do NOT call set_icp and do NOT refine it again — the criteria are settled.
+
+Read them with get_run_state, then start at discovery and continue until you have called finalize_run.`;
+  }
+
   return `Qualification objective:
 
 """

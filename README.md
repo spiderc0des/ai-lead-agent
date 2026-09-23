@@ -34,7 +34,12 @@ supabase/migrations/0001_init.sql          domain tables
 supabase/migrations/0002_auth_rls.sql      profiles, admin role, RLS, realtime
 supabase/migrations/0003_budget.sql        shared spend ledger
 supabase/migrations/0004_clarification.sql lets a run stop and ask
+supabase/migrations/0005_continue.sql      approve an ICP, and answer a run
 ```
+
+The last two add run statuses. Until they are applied, the tool suite skips the
+assertions that depend on them and says so, rather than reporting a pending
+migration as a failure.
 
 Put the project URL and both keys in `.env.local`. Two things that bite:
 

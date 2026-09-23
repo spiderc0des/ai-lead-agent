@@ -16,7 +16,7 @@ export default async function RunsPage() {
   const supabase = await supabaseServer();
   const { data: runs } = await supabase
     .from("runs")
-    .select("id, objective, status, created_at, total_cost_usd, limits")
+    .select("id, objective, status, created_at, total_cost_usd, limits, parent_run_id")
     .order("created_at", { ascending: false })
     .limit(50);
 
@@ -38,6 +38,7 @@ export default async function RunsPage() {
     created_at: r.created_at as string,
     total_cost_usd: r.total_cost_usd as number | null,
     limits: r.limits as RunRow["limits"],
+    parent_run_id: (r.parent_run_id as string | null) ?? null,
     qualified: qualifiedByRun.get(r.id as string) ?? 0,
   }));
 

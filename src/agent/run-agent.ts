@@ -48,6 +48,7 @@ type TerminalStatus =
   | "completed"
   | "needs_review"
   | "needs_clarification"
+  | "awaiting_confirmation"
   | "failed"
   | "cancelled";
 
@@ -60,6 +61,15 @@ type TerminalStatus =
 export async function runAgent(runId: string): Promise<TerminalStatus> {
   const ctx = await loadRunContext(runId);
   const model = process.env.AGENT_MODEL || DEFAULT_MODEL;
+
+  // A run continued from an approved ICP already has one recorded; it starts
+  // at discovery rather than refining criteria that are already settled.
+  const { data: seeded } = await supabaseAdmin()
+    .from("runs")
+    .select("icp, parent_run_id")
+    .eq("id", runId)
+    .single();
+  const icpAlreadyApproved = Boolean(seeded?.icp && seeded?.parent_run_id);
 
   const controller = new AbortController();
   inFlight.set(runId, controller);
@@ -140,7 +150,7 @@ export async function runAgent(runId: string): Promise<TerminalStatus> {
     let sawResult = false;
 
     const stream = query({
-      prompt: buildPrompt(ctx.objective),
+      prompt: buildPrompt(ctx.objective, icpAlreadyApproved),
       options: {
         model,
         cwd: agentCwd(),
@@ -273,7 +283,8 @@ export async function runAgent(runId: string): Promise<TerminalStatus> {
   if (
     finalRow?.status === "completed" ||
     finalRow?.status === "needs_review" ||
-    finalRow?.status === "needs_clarification"
+    finalRow?.status === "needs_clarification" ||
+    finalRow?.status === "awaiting_confirmation"
   ) {
     terminal = finalRow.status;
     if (statusReason) {

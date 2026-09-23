@@ -8,6 +8,7 @@ import { CopyButton } from "@/components/CopyButton";
 import { RunActions } from "@/components/RunActions";
 import { type Draft } from "@/components/OutreachCard";
 import { LeadList } from "@/components/LeadList";
+import { RunResponse } from "@/components/RunResponse";
 import type { Icp, RunLimits } from "@/lib/schemas";
 
 type Run = {
@@ -16,6 +17,7 @@ type Run = {
   total_cost_usd: number | null; num_turns: number | null; duration_ms: number | null;
   summary: string | null; quality_scorecard: Record<string, string> | null; created_at: string;
   clarification_questions: string[] | null;
+  parent_run_id: string | null;
 };
 type Lead = {
   id: string; company_name: string; company_domain: string;
@@ -122,17 +124,25 @@ export function RunView({ runId }: { runId: string }) {
 
       <RunActions runId={runId} objective={run.objective} live={live} hasQualified={qualified.length > 0} />
 
-      {run.status_reason && <p className="panel panel-warning">{run.status_reason}</p>}
-
-      {run.clarification_questions?.length ? (
-        <div className="panel panel-info">
-          <p className="font-medium">The agent stopped to ask before spending anything.</p>
-          <ul className="mt-1.5 list-disc pl-5">
-            {run.clarification_questions.map((q) => <li key={q}>{q}</li>)}
-          </ul>
-          <p className="hint">Answer these in a new run rather than editing this one.</p>
-        </div>
+      {/* One panel. The reason and the questions were two, which said the same
+          thing twice before offering anything to do about it. */}
+      {run.status === "needs_clarification" && run.clarification_questions?.length ? (
+        <RunResponse runId={runId} mode="clarify" questions={run.clarification_questions} />
+      ) : run.status === "awaiting_confirmation" ? (
+        <RunResponse runId={runId} mode="confirm" questions={[]} />
+      ) : run.status_reason ? (
+        <p className="panel panel-warning">{run.status_reason}</p>
       ) : null}
+
+      {run.parent_run_id && (
+        <p className="hint">
+          Continued from{" "}
+          <a href={`/runs/${run.parent_run_id}`} style={{ color: "var(--accent)" }}>
+            an earlier run
+          </a>
+          .
+        </p>
+      )}
 
       {/* ------------------------------------------- objective vs ICP ---- */}
       <div className="grid gap-4 md:grid-cols-2">
@@ -165,7 +175,7 @@ export function RunView({ runId }: { runId: string }) {
                 empty="Nothing explicit — everything below was inferred."
               />
               <IcpList label="Assumed by the agent" items={run.icp.assumptions} muted />
-              <IcpList label="Hard filters" items={run.icp.hard_filters} />
+              <IcpList label="Hard filters" items={run.icp.hard_filters} defaultOpen />
               <IcpList label="Soft preferences" items={run.icp.soft_preferences} muted />
               <IcpList label="Disqualifiers" items={run.icp.disqualifiers} muted />
             </dl>
@@ -277,30 +287,61 @@ export function RunView({ runId }: { runId: string }) {
   );
 }
 
+/**
+ * One list inside the ICP, folded by default.
+ *
+ * Six of these open at once is most of a screen of bullets that are read
+ * carefully once and skimmed thereafter, so each states its own length and
+ * opens on demand. `defaultOpen` is for the one that answers "did it invent
+ * these criteria" — hard filters.
+ */
 function IcpList({
   label,
   items,
   muted,
   empty,
+  defaultOpen,
 }: {
   label: string;
   items?: string[] | null;
   muted?: boolean;
   empty?: string;
+  defaultOpen?: boolean;
 }) {
+  const [open, setOpen] = useState(Boolean(defaultOpen));
   if (!items?.length && !empty) return null;
+
   return (
     <div>
-      <dt className="label mb-0.5">{label}</dt>
-      <dd>
-        {items?.length ? (
-          <ul className="list-disc pl-5" style={muted ? { color: "var(--ink-soft)" } : undefined}>
-            {items.map((f) => <li key={f}>{f}</li>)}
-          </ul>
-        ) : (
-          <p style={{ color: "var(--ink-faint)" }}>{empty}</p>
-        )}
-      </dd>
+      <dt>
+        <button
+          type="button"
+          onClick={() => setOpen((o) => !o)}
+          aria-expanded={open}
+          className="flex w-full items-center gap-1.5 text-left"
+        >
+          <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor"
+               strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
+               style={{ color: "var(--ink-faint)", transform: open ? "rotate(90deg)" : "none", transition: "transform .12s" }}>
+            <path d="M6 3l5 5-5 5" />
+          </svg>
+          <span className="label mb-0">{label}</span>
+          {items?.length ? (
+            <span className="text-xs" style={{ color: "var(--ink-faint)" }}>({items.length})</span>
+          ) : null}
+        </button>
+      </dt>
+      {open && (
+        <dd className="mt-1">
+          {items?.length ? (
+            <ul className="list-disc pl-6" style={muted ? { color: "var(--ink-soft)" } : undefined}>
+              {items.map((f) => <li key={f}>{f}</li>)}
+            </ul>
+          ) : (
+            <p className="pl-6" style={{ color: "var(--ink-faint)" }}>{empty}</p>
+          )}
+        </dd>
+      )}
     </div>
   );
 }

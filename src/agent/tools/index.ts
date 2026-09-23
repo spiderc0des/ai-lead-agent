@@ -48,6 +48,28 @@ import { withLogging, textResult, errorResult, LimitError } from "@/agent/tools/
 export const LEAD_SERVER_NAME = "lead";
 
 /**
+ * Statuses in which a run may still spend money. Anything else means the run
+ * has finished, been cancelled, or is holding for a person — and a tool that
+ * spends must not proceed on the strength of an in-memory assumption that it
+ * is still live.
+ */
+const SPENDABLE_STATUSES = new Set(["queued", "running"]);
+
+async function assertRunIsSpendable(runId: string): Promise<string | null> {
+  const { data } = await supabaseAdmin()
+    .from("runs")
+    .select("status")
+    .eq("id", runId)
+    .maybeSingle();
+  const status = data?.status as string | undefined;
+  if (!status) return "This run no longer exists.";
+  if (SPENDABLE_STATUSES.has(status)) return null;
+  return `This run is ${status.replace(/_/g, " ")}, so it cannot search or scrape any further.`;
+}
+
+
+
+/**
  * The tool definitions themselves, so tests can drive a handler directly
  * instead of spending a model turn to reach it. Every guard in here is a
  * server-side invariant; none of them needs an agent to exercise.
@@ -90,6 +112,40 @@ export function buildLeadTools(ctx: RunContext) {
           .update({ icp })
           .eq("id", ctx.runId);
         if (error) throw new Error(`Could not save ICP: ${error.message}`);
+
+        // The approval gate. The ICP is recorded either way — that is the
+        // thing being reviewed — but the run stops here rather than spending
+        // the rest of its budget on criteria nobody has looked at.
+        if (ctx.limits.require_icp_confirmation) {
+          const { error: gateError } = await supabaseAdmin()
+            .from("runs")
+            .update({
+              status: "awaiting_confirmation",
+              status_reason:
+                "Waiting for you to approve these criteria before any searching or scraping.",
+              finished_at: new Date().toISOString(),
+            })
+            .eq("id", ctx.runId);
+
+          // Reporting a gate that was never recorded is worse than no gate:
+          // the agent stops, the run still reads as running, and nothing
+          // stops the next call from spending.
+          if (gateError) {
+            throw new Error(
+              `Could not hold the run for approval: ${gateError.message}. ` +
+                `Has supabase/migrations/0005_continue.sql been applied?`,
+            );
+          }
+
+          return {
+            result: textResult(
+              `ICP recorded and the run is now waiting for the person to approve it. ` +
+                `Stop here: do not call discover_companies or anything else. ` +
+                `They will start a new run from these criteria if they are right.`,
+            ),
+            summary: { awaiting_confirmation: true, hard_filters: icp.hard_filters },
+          };
+        }
 
         // Surfaced back to the agent because promoting an inference to a hard
         // filter is the easy mistake, and it silently rejects leads the user
@@ -153,6 +209,9 @@ export function buildLeadTools(ctx: RunContext) {
     },
     async (args) =>
       withLogging(ctx, "discover_companies", args.purpose, args, async () => {
+        const notSpendable = await assertRunIsSpendable(ctx.runId);
+        if (notSpendable) return { result: errorResult(notSpendable) };
+
         // The ICP gate: discovery is refused until the refined criteria exist.
         const { data: run } = await supabaseAdmin()
           .from("runs")
@@ -334,6 +393,9 @@ export function buildLeadTools(ctx: RunContext) {
     },
     async (args) =>
       withLogging(ctx, "scrape_websites", args.purpose, args, async () => {
+        const notSpendable = await assertRunIsSpendable(ctx.runId);
+        if (notSpendable) return { result: errorResult(notSpendable) };
+
         const counters = await readCounters(ctx);
         if (counters.remainingScrapes <= 0) {
           throw new LimitError(

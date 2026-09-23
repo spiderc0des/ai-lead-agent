@@ -131,6 +131,25 @@ export function NewRunForm({ hasActiveRun }: { hasActiveRun: boolean }) {
 
         {showLimits && (
           <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3">
+            <label className="col-span-2 flex items-start gap-2 text-xs sm:col-span-3">
+              <input
+                type="checkbox"
+                className="mt-0.5"
+                checked={limits.require_icp_confirmation}
+                onChange={(e) =>
+                  setLimits({ ...limits, require_icp_confirmation: e.target.checked })
+                }
+              />
+              <span>
+                <span className="label mb-0">Show me the criteria before searching</span>
+                <span className="hint block">
+                  The agent stops after writing the ICP and waits for your approval. That pass
+                  costs about $0.05; a full run costs $0.70 to $1.20, so it is cheap insurance
+                  against spending the latter on a misreading.
+                </span>
+              </span>
+            </label>
+
             {LIMIT_FIELDS.map(({ key, label, help, stop }) => (
               <label key={key} className="text-xs">
                 <span className="label mb-0">{label}</span>

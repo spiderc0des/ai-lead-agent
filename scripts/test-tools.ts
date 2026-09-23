@@ -38,7 +38,13 @@ async function main() {
   const { data: anyUser } = await db.from("profiles").select("id").limit(1).single();
   if (!anyUser) throw new Error("No profile exists — run seed:admin first.");
 
-  const limits = { ...DEFAULT_LIMITS, max_leads: 2, max_scrapes: 3, max_candidates: 5 };
+  const limits = {
+    ...DEFAULT_LIMITS,
+    max_leads: 2,
+    max_scrapes: 3,
+    max_candidates: 5,
+    require_icp_confirmation: false,
+  };
   const { data: run, error: runErr } = await db.from("runs").insert({
     user_id: anyUser.id,
     objective: "TEST RUN — tool guard suite, safe to delete",
@@ -58,6 +64,18 @@ async function main() {
 
   console.log(`\ntest run ${run.id}\n`);
 
+  // Used by the set_icp block and the approval-gate block below.
+  const fullIcp = {
+    target_company_type: "B2B SaaS company selling to operations teams",
+    industries: ["field service management"], geography: ["United States"],
+    headcount_range: "10-100 employees", buyer_persona: "Head of Operations",
+    business_problem: "manual back-office workflows",
+    hard_filters: ["US", "B2B", "SaaS", "10-100 employees"],
+    soft_preferences: ["hiring ops roles"], disqualifiers: ["enterprise only"],
+    user_stated: ["US", "B2B", "SaaS", "10-100 employees"],
+    assumptions: ["Assumed ops-heavy verticals, since that is who feels the problem"],
+  };
+
   try {
     /* ------------------------------------------------ the ICP gate ------ */
     console.log("== discovery is refused before an ICP exists ==");
@@ -72,16 +90,6 @@ async function main() {
       const bad = await call("set_icp", { target_company_type: "x" });
       check("rejects an incomplete ICP", bad.isError === true);
 
-      const fullIcp = {
-        target_company_type: "B2B SaaS company selling to operations teams",
-        industries: ["field service management"], geography: ["United States"],
-        headcount_range: "10-100 employees", buyer_persona: "Head of Operations",
-        business_problem: "manual back-office workflows",
-        hard_filters: ["US", "B2B", "SaaS", "10-100 employees"],
-        soft_preferences: ["hiring ops roles"], disqualifiers: ["enterprise only"],
-        user_stated: ["US", "B2B", "SaaS", "10-100 employees"],
-        assumptions: ["Assumed ops-heavy verticals, since that is who feels the problem"],
-      };
       const good = await call("set_icp", fullIcp);
       check("accepts a complete ICP", good.isError !== true, text(good).slice(0, 150));
       check("  reports the hard/soft split back", /Soft preferences: 1/.test(text(good)), text(good).slice(0, 220));
@@ -248,6 +256,48 @@ async function main() {
       const r2 = await call("save_lead", { ...baseLead, company_domain: "third.example", company_name: "Third",
         qualification_status: "needs_review", source_urls: [realUrl] });
       check("but needs_review is still allowed past the cap", r2.isError !== true, text(r2).slice(0, 120));
+    }
+
+    /* ------------------------------------------------ the approval gate -- */
+    console.log("\n== require_icp_confirmation stops before discovery ==");
+    {
+      const { data: gated } = await db.from("runs").insert({
+        user_id: anyUser.id,
+        objective: "TEST RUN — approval gate, safe to delete",
+        limits: { ...limits, require_icp_confirmation: true },
+        status: "running",
+      }).select("id").single();
+
+      const gatedTools = buildLeadTools({
+        runId: gated!.id, userId: anyUser.id,
+        limits: { ...limits, require_icp_confirmation: true }, objective: "test",
+      });
+      const gatedCall = async (n: string, a: unknown) =>
+        (await gatedTools.find((t) => t.name === n)!.handler(a as never, {})) as
+          { content?: { type: string; text?: string }[]; isError?: boolean };
+
+      const r = await gatedCall("set_icp", fullIcp);
+
+      // Needs 0005_continue.sql for the awaiting_confirmation status. Say so
+      // rather than reporting a pending migration as a failure — and never
+      // reach the discovery assertion below, which spends real Apify credit.
+      if (/0005_continue|violates check constraint|Could not hold the run/.test(text(r))) {
+        console.log("  SKIP approval gate — run supabase/migrations/0005_continue.sql first");
+        skipped += 4;
+      } else {
+        check("set_icp records the ICP and stops", /waiting for the person to approve/.test(text(r)), text(r).slice(0, 160));
+
+        const { data: after } = await db.from("runs").select("status, icp").eq("id", gated!.id).single();
+        check("  run is awaiting_confirmation", after?.status === "awaiting_confirmation", after?.status);
+        check("  but the ICP is recorded, since that is what gets reviewed", Boolean(after?.icp));
+
+        // Discovery must stay shut even though an ICP now exists. This call
+        // costs real money if the guard is broken, which is the point of it.
+        const d = await gatedCall("discover_companies", { queries: ["helpdesk software"], purpose: "should not run" });
+        check("  discovery is still refused", d.isError === true, text(d).slice(0, 140));
+      }
+
+      await db.from("runs").delete().eq("id", gated!.id);
     }
 
     /* -------------------------------------------- request_clarification -- */

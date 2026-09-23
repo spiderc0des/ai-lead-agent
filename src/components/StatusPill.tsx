@@ -4,6 +4,7 @@ const TONE: Record<string, string> = {
   completed: "badge badge-success",
   needs_review: "badge badge-warning",
   needs_clarification: "badge badge-warning",
+  awaiting_confirmation: "badge badge-accent",
   failed: "badge badge-danger",
   cancelled: "badge",
   qualified: "badge badge-success",
