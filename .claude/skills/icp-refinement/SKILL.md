@@ -121,7 +121,9 @@ Compare that with putting *"appears early-stage or small/lean"* in `hard_filters
 
 ## When to stop and ask instead
 
-Vague is normal and you refine it. **Too vague to search** is a different and much rarer thing, and it has a tool: `request_clarification`, which ends the run without spending anything.
+Vague is normal and you refine it. **Too vague to search** is a different and much rarer thing, and it has a tool: `mcp__lead__request_clarification`, which ends the run without spending anything.
+
+**The test is `user_stated`.** If nothing in the objective survives into `user_stated`, there is no signal and the ICP would be invention rather than inference. `mcp__lead__set_icp` refuses an empty `user_stated` for exactly that reason, so this is not a judgement you can talk yourself out of.
 
 Ask only when one of these is true:
 
@@ -130,6 +132,8 @@ Ask only when one of these is true:
 - **There is no signal at all, even with the business context applied.** "find companies", "leads please" — anything you wrote would be invention, not inference.
 
 `us business` is none of these. One real constraint plus the business context is enough to write a defensible ICP, so refine it, record the assumptions, and proceed.
+
+`companies with.` **is** the third case. It is truncated and states nothing — no geography, no industry, no size. Writing "assumed United States, assumed 5-50 employees, assumed agencies" is not refining a thin objective, it is authoring a different one and attributing it to the user. Call `mcp__lead__request_clarification` and stop. Do not call `set_icp`, and do not discover anything.
 
 When you do ask, give two or three specific questions whose answers would make it searchable — not "can you be more specific".
 
@@ -153,4 +157,4 @@ Never use the words *companies*, *startups*, *list*, *best* or *top* in a query.
 
 So `industries` should be concrete enough to search: "field service management", "customer support tooling", "inventory management" beat "vertical SaaS".
 
-If the objective is too vague to search, do not stop and ask — you have no interactive user. Choose a defensible reading, make it explicit in `business_problem` and `soft_preferences`, and say in your final summary what you assumed.
+If an objective is merely vague, refine it as above and say in your final summary what you assumed. If it meets one of the stop-and-ask conditions, call `mcp__lead__request_clarification` — see "When to stop and ask instead".

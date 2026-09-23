@@ -22,8 +22,11 @@ export async function POST(request: Request) {
 
     const parsed = CreateRunSchema.safeParse(await request.json());
     if (!parsed.success) {
+      // Show the specific reason: "Invalid request" tells someone with a
+      // truncated objective nothing about what to change.
+      const first = parsed.error.issues[0]?.message ?? "Invalid request";
       return NextResponse.json(
-        { error: "Invalid request", detail: parsed.error.flatten() },
+        { error: first, detail: parsed.error.flatten() },
         { status: 400 },
       );
     }

@@ -12,6 +12,7 @@ import {
   isNonCompanyHost,
   assertPublicHttpUrl,
 } from "@/lib/domain";
+import { CreateRunSchema } from "@/lib/schemas";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 
@@ -152,6 +153,25 @@ console.log("\n== scrape target guard ==");
     ok = false;
   }
   check("allows a public https URL", ok);
+}
+
+console.log("\n== objective shape guard ==");
+{
+  // A truncated objective is refused before a run exists, so it costs nothing.
+  // "us business" must still pass: two words, but one real constraint.
+  const reject = ["companies with.", "companies with", "find me leads for", "leads for the"];
+  const accept = [
+    "us business",
+    "US agencies with manual client onboarding",
+    "field service software for small business",
+    "Find 10 US B2B SaaS companies with 10 to 100 employees that may need AI automation support.",
+  ];
+  for (const o of reject) {
+    check(`rejects cut-off objective ${JSON.stringify(o)}`, !CreateRunSchema.safeParse({ objective: o }).success);
+  }
+  for (const o of accept) {
+    check(`accepts ${JSON.stringify(o)}`, CreateRunSchema.safeParse({ objective: o }).success);
+  }
 }
 
 console.log("\n== injection honeypot fixture ==");

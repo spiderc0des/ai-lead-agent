@@ -86,6 +86,18 @@ async function main() {
       check("accepts a complete ICP", good.isError !== true, text(good).slice(0, 150));
       check("  reports the hard/soft split back", /Soft preferences: 1/.test(text(good)), text(good).slice(0, 220));
 
+      // The case that prompted this: an objective stating nothing produces an
+      // ICP built entirely from assumption, which is authoring rather than
+      // refining. Must be refused, and must point at the alternative.
+      const noSignal = await call("set_icp", {
+        ...fullIcp,
+        user_stated: [],
+        assumptions: ["Objective gave no usable signal, so the whole ICP is inferred"],
+      });
+      check("refuses an ICP with nothing from the objective", noSignal.isError === true, text(noSignal).slice(0, 120));
+      check("  and names request_clarification as the way out",
+        /request_clarification/.test(text(noSignal)), text(noSignal).slice(0, 220));
+
       const noProvenance = await call("set_icp", {
         ...fullIcp, user_stated: undefined, assumptions: undefined,
       });

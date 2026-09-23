@@ -66,6 +66,25 @@ export function buildLeadTools(ctx: RunContext) {
       withLogging(ctx, "set_icp", "Record refined ICP before searching", args, async () => {
         const icp = IcpSchema.parse(args);
 
+        // An empty user_stated IS the "no signal" condition, by definition:
+        // nothing in the objective survived into the criteria, so the ICP is
+        // authored rather than inferred. Enforced here rather than left to the
+        // prompt, because the prompt asks the model to judge its own input and
+        // a plausible-looking ICP is the easiest thing in the world to write.
+        // This also means a junk objective costs a few cents of model spend
+        // instead of an Apify call against the shared budget.
+        if (icp.user_stated.length === 0) {
+          return {
+            result: errorResult(
+              `No constraint from the objective was recorded in user_stated, so this ICP would ` +
+                `be invention rather than refinement — a different objective wearing the user's ` +
+                `name. Call request_clarification with 2-3 specific questions instead. ` +
+                `Discovery stays locked until a valid ICP exists.`,
+            ),
+            summary: { rejected: "empty user_stated", assumptions: icp.assumptions.length },
+          };
+        }
+
         const { error } = await supabaseAdmin()
           .from("runs")
           .update({ icp })

@@ -82,7 +82,8 @@ export const IcpShape = {
     .array(z.string())
     .describe(
       "Constraints taken directly from the objective, quoted or closely paraphrased. " +
-        "For 'us business' this is just the geography. Empty is a valid answer.",
+        "For 'us business' this is just the geography. Must not be empty: an objective " +
+        "that contributes nothing is one to ask about, not one to refine.",
     ),
   assumptions: z
     .array(z.string())
@@ -191,7 +192,32 @@ export const ScorecardSchema = z.object(ScorecardShape);
  * Objective (user input)
  * ---------------------------------------------------------------------- */
 
+/**
+ * Words an objective cannot end on. A objective that stops on one of these was
+ * cut off mid-thought — "companies with." is the case that prompted this — and
+ * refusing it in the form is free, where finding out inside a run costs model
+ * spend and possibly an Apify call.
+ *
+ * Deliberately a short closed list of function words, and nothing more. A
+ * minimum word count was tried and rejected "us business" — two words, one
+ * real constraint, and a case that must work — so brevity is not the signal.
+ *
+ * This is a convenience, not the guarantee: set_icp refusing an empty
+ * user_stated is what actually stops a signal-free objective from becoming an
+ * invented ICP.
+ */
+const DANGLING_TAIL =
+  /\b(with|and|or|for|in|on|at|to|of|the|a|an|that|which|from|by|like|about)\s*[.,;:]?\s*$/i;
+
 export const CreateRunSchema = z.object({
-  objective: z.string().min(10).max(2000),
+  objective: z
+    .string()
+    .min(10)
+    .max(2000)
+    .refine((v) => !DANGLING_TAIL.test(v.trim()), {
+      message:
+        "That objective looks cut off — it ends mid-phrase. Finish the sentence, " +
+        "e.g. 'US agencies with manual client onboarding'.",
+    }),
   limits: RunLimitsSchema.partial().optional(),
 });

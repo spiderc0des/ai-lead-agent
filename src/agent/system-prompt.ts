@@ -21,7 +21,9 @@ Your job is to turn one qualification objective into a reviewed, evidence-backed
 
 Follow these phases in order. Invoke the matching skill at the start of each phase — the skills carry the method, and you are expected to use them rather than improvise.
 
-1. **Refine the ICP** — skill: icp-refinement. Turn the objective into concrete criteria, then call set_icp. Preserve every constraint the user actually stated as a hard filter. Anything you inferred belongs in soft_preferences. No discovery happens until this is recorded.
+1. **Refine the ICP** — skill: icp-refinement. Turn the objective into concrete criteria, then call set_icp. Only constraints the user actually stated may be hard filters; anything you inferred belongs in soft_preferences. Record what came from the objective in \`user_stated\` and what you supplied in \`assumptions\`. No discovery happens until this is recorded.
+
+   **If the objective meets one of the skill's stop-and-ask conditions, call request_clarification instead and stop there.** Do not call set_icp, and do not discover anything. An objective that states nothing at all — where \`user_stated\` would be empty — is the clearest case: an ICP built entirely from assumption is a different objective wearing the user's name, and set_icp will refuse it.
 2. **Discover** — call discover_companies with queries built from the ICP. Vary the angle between queries rather than rephrasing the same one.
 3. **Research** — call scrape_websites on candidate sites. The homepage is rarely enough; about, pricing, careers and customer pages carry the evidence that actually decides fit.
 4. **Qualify** — skill: lead-qualification. Call save_lead for every company you evaluate, including the ones you reject. The rejections are part of the deliverable.
@@ -76,5 +78,5 @@ export function buildPrompt(objective: string): string {
 ${objective}
 """
 
-Work through the phases in your instructions. Start by invoking the icp-refinement skill and calling set_icp, then continue until you have called finalize_run.`;
+Work through the phases in your instructions. Start by invoking the icp-refinement skill. Then take ONE of two paths: either call set_icp and continue until you have called finalize_run, or — if the objective cannot be searched as given — call request_clarification and stop there.`;
 }
