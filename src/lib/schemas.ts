@@ -29,8 +29,14 @@ export const RunLimitsSchema = z.object({
    * the criteria first is cheap insurance against spending the latter on a
    * misreading of the objective.
    */
-  require_icp_confirmation: z.boolean(),
+  require_icp_confirmation: z.boolean().default(false),
 });
+// ^ Defaulted, not required: limits are frozen into runs.limits at creation,
+// so every run stored before this field existed lacks it — and a strict parse
+// made all of them impossible to load or resume. Absent means the run was
+// created without the gate, so false is the truthful reading. New runs get
+// true explicitly from DEFAULT_LIMITS. Any field added here later needs the
+// same treatment.
 
 export type RunLimits = z.infer<typeof RunLimitsSchema>;
 

@@ -12,7 +12,7 @@ import {
   isNonCompanyHost,
   assertPublicHttpUrl,
 } from "@/lib/domain";
-import { CreateRunSchema } from "@/lib/schemas";
+import { CreateRunSchema, RunLimitsSchema, DEFAULT_LIMITS } from "@/lib/schemas";
 import { composeObjective, answersFromEvents } from "@/lib/objective";
 import { readFileSync } from "node:fs";
 import path from "node:path";
@@ -173,6 +173,16 @@ console.log("\n== objective shape guard ==");
   for (const o of accept) {
     check(`accepts ${JSON.stringify(o)}`, CreateRunSchema.safeParse({ objective: o }).success);
   }
+}
+
+console.log("\n== limits stored by older versions still load ==");
+{
+  // Exactly the shape saved before require_icp_confirmation existed.
+  const legacy = { max_leads: 10, max_turns: 140, max_scrapes: 45, wall_clock_ms: 1800000, max_budget_usd: 3, max_candidates: 60 };
+  const r = RunLimitsSchema.safeParse(legacy);
+  check("a pre-gate run's limits parse", r.success, r.success ? undefined : r.error.issues);
+  check("  and read as not gated", r.success && r.data.require_icp_confirmation === false);
+  check("new runs still default to gated", DEFAULT_LIMITS.require_icp_confirmation === true);
 }
 
 console.log("\n== the working objective ==");

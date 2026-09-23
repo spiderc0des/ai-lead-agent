@@ -146,6 +146,15 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
   } catch (err) {
     const authResponse = authErrorResponse(err);
     if (authResponse) return authResponse;
+    if (err instanceof z.ZodError) {
+      // A stored row that no longer matches the schema is a bug on our side,
+      // not something the person can fix — so log the detail and say so.
+      console.error("[continue] stored run failed validation:", err.issues);
+      return NextResponse.json(
+        { error: "This run's saved settings could not be read, so it cannot be resumed. Start a new run instead." },
+        { status: 500 },
+      );
+    }
     const message = err instanceof Error ? err.message : "Unexpected error";
     return NextResponse.json({ error: message }, { status: 500 });
   }
