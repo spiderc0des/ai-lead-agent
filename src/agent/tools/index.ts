@@ -36,6 +36,7 @@ import {
 } from "@/lib/apify";
 import { scrapePage } from "@/lib/firecrawl";
 import { sanitizeScrapedContent, findEmailAddress } from "@/agent/sanitize";
+import { draftFormatProblems } from "@/lib/draft-format";
 import { withLogging, textResult, errorResult, LimitError } from "@/agent/tools/helpers";
 
 /**
@@ -803,6 +804,7 @@ export function buildLeadTools(ctx: RunContext) {
       "is traceable. Write as a person emailing one company, not as marketing copy: plain, " +
       "concrete subject lines, email 1 under 90 words, no diagnosis of what is happening " +
       "inside their business, and one answerable question rather than an offer of a meeting. " +
+      "Every email opens 'Hi [Name],' and signs off '[Your name]'; email 1 names Koya once. " +
       "Drafts are for human review only — nothing is ever sent.",
     OutreachShape,
     async (args) =>
@@ -849,6 +851,7 @@ export function buildLeadTools(ctx: RunContext) {
         const corpus = [
           ...drafts.emails.flatMap((e) => [e.subject, e.body, e.personalization_note]),
           drafts.linkedin_message,
+          drafts.linkedin_personalization_note,
         ].join("\n");
         const leaked = findEmailAddress(corpus);
         if (leaked) {
@@ -867,6 +870,33 @@ export function buildLeadTools(ctx: RunContext) {
           };
         }
 
+        const formatProblems = draftFormatProblems(drafts);
+        if (formatProblems.length > 0) {
+          return {
+            result: errorResult(`Fix and resubmit: ${formatProblems.join(" ")}`),
+          };
+        }
+
+        // Job listings, team pages and pricing go stale. Stamping each note with
+        // the day its page was read lets the reviewer see how old a claim is
+        // before sending — the model cannot be trusted to know the date, so the
+        // server adds it.
+        const { data: pages } = await supabaseAdmin()
+          .from("page_sources")
+          .select("url, scraped_at")
+          .eq("run_id", ctx.runId)
+          .in("url", [...allowed]);
+        const readOn = new Map<string, string>();
+        for (const p of pages ?? []) {
+          const day = String(p.scraped_at ?? "").slice(0, 10);
+          if (day && (!readOn.has(p.url) || day < readOn.get(p.url)!)) readOn.set(p.url, day);
+        }
+        const stamp = (note: string, url: string | null) => {
+          const day = url ? readOn.get(url) : undefined;
+          return day ? `${note} (page read ${day})` : note;
+        };
+        const linkedinEvidence = drafts.emails[0]?.evidence_url ?? null;
+
         const rows = [
           ...drafts.emails.map((e) => ({
             run_id: ctx.runId,
@@ -876,7 +906,7 @@ export function buildLeadTools(ctx: RunContext) {
             step_number: e.step_number,
             subject: e.subject,
             body: e.body,
-            personalization_note: e.personalization_note,
+            personalization_note: stamp(e.personalization_note, e.evidence_url),
             evidence_url: e.evidence_url,
           })),
           {
@@ -887,8 +917,8 @@ export function buildLeadTools(ctx: RunContext) {
             step_number: 1,
             subject: null,
             body: drafts.linkedin_message,
-            personalization_note: null,
-            evidence_url: drafts.emails[0]?.evidence_url ?? null,
+            personalization_note: stamp(drafts.linkedin_personalization_note, linkedinEvidence),
+            evidence_url: linkedinEvidence,
           },
         ];
 

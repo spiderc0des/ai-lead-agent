@@ -6,7 +6,7 @@ const nextConfig: NextConfig = {
    * own native binaries at runtime. Bundling it breaks that resolution, so it
    * must stay external to the server build.
    */
-  serverExternalPackages: ["@anthropic-ai/claude-agent-sdk"],
+  serverExternalPackages: ["@anthropic-ai/claude-agent-sdk", "exceljs"],
 };
 
 export default nextConfig;

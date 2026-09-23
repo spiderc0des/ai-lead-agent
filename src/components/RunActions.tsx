@@ -15,6 +15,7 @@ export function RunActions({
   objective,
   live,
   hasQualified,
+  hasLeadList,
   logOpen,
   onToggleLog,
   logCount,
@@ -24,6 +25,8 @@ export function RunActions({
   objective: string;
   live: boolean;
   hasQualified: boolean;
+  /** Any qualified or needs-review lead — the spreadsheet has a sheet for each. */
+  hasLeadList: boolean;
   logOpen: boolean;
   onToggleLog: () => void;
   logCount: number;
@@ -105,10 +108,16 @@ export function RunActions({
             <a className="btn btn-sm" href={`/api/runs/${runId}/export?format=md`}>
               Download Markdown
             </a>
-            <a className="btn btn-sm" href={`/api/runs/${runId}/export?format=csv`}>
-              Lead list CSV
-            </a>
           </>
+        )}
+        {!live && hasLeadList && (
+          <a
+            className="btn btn-sm"
+            href={`/api/runs/${runId}/export?format=xlsx`}
+            title="Excel workbook: a Qualified sheet and a Needs review sheet"
+          >
+            Lead list (.xlsx)
+          </a>
         )}
 
         <ConfirmButton

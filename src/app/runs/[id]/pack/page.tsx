@@ -72,7 +72,7 @@ export default async function PackPage({ params }: { params: Promise<{ id: strin
           </div>
           <div className="flex gap-2">
             <a className="btn btn-sm" href={`/api/runs/${id}/export?format=md`}>Markdown</a>
-            <a className="btn btn-sm" href={`/api/runs/${id}/export?format=csv`}>CSV</a>
+            <a className="btn btn-sm" href={`/api/runs/${id}/export?format=xlsx`}>Lead list (.xlsx)</a>
           </div>
         </header>
 

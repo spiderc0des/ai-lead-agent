@@ -97,6 +97,7 @@ export function OutreachCard({
             <CopyButton value={linkedin.body} />
           </div>
           <p className="preformatted mt-1.5">{linkedin.body}</p>
+          {linkedin.personalization_note && <p className="hint">{linkedin.personalization_note}</p>}
         </div>
       )}
     </div>

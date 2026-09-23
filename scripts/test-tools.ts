@@ -192,7 +192,7 @@ async function main() {
       console.log("\n== save_outreach_drafts ==");
       const email = (n: number, evidence: string) => ({
         step_number: n, subject: `Subject ${n}`,
-        body: "Noticed your team handles onboarding manually across several tools, which usually breaks around this size.",
+        body: `Hi [Name],\n\nNoticed your team handles onboarding across several tools${n === 1 ? " — I'm with Koya" : ""}. Is that where the time goes?\n\n[Your name]`,
         personalization_note: "References the onboarding workflow described on their about page.",
         evidence_url: evidence,
       });
@@ -200,7 +200,8 @@ async function main() {
         const r = await call("save_outreach_drafts", {
           company_domain: "example.com",
           emails: [email(1, "https://not-a-source.example"), email(2, realUrl!), email(3, realUrl!)],
-          linkedin_message: "Saw how your team handles onboarding — happy to share what similar teams automated first.",
+          linkedin_message: "Hi [Name], saw how your team handles onboarding — happy to share what similar teams automated first.",
+          linkedin_personalization_note: "Onboarding tools listed on their about page.",
         });
         check("rejects a draft citing a URL outside the lead's sources", /not among/.test(text(r)), text(r).slice(0, 160));
       }
@@ -208,17 +209,33 @@ async function main() {
         const r = await call("save_outreach_drafts", {
           company_domain: "example.com",
           emails: [email(1, realUrl!), email(2, realUrl!), email(3, realUrl!)],
-          linkedin_message: "Reach me at sales@acme.com to discuss onboarding automation for your team.",
+          linkedin_message: "Hi [Name], reach me at sales@acme.com to discuss onboarding automation for your team.",
+          linkedin_personalization_note: "Onboarding tools listed on their about page.",
         });
         check("rejects copy containing an email address", /email address/.test(text(r)), text(r).slice(0, 160));
+      }
+      {
+        const generic = { ...email(2, realUrl!), body: "Hi — following up on my last note about onboarding at your company." };
+        const r = await call("save_outreach_drafts", {
+          company_domain: "example.com",
+          emails: [email(1, realUrl!), generic, email(3, realUrl!)],
+          linkedin_message: "Hi [Name], saw how your team handles onboarding — happy to share what similar teams automated first.",
+          linkedin_personalization_note: "Onboarding tools listed on their about page.",
+        });
+        check("rejects an email without a [Name] greeting or sign-off", /Email 2 must open/.test(text(r)) && /\[Your name\]/.test(text(r)), text(r).slice(0, 200));
       }
       {
         const r = await call("save_outreach_drafts", {
           company_domain: "example.com",
           emails: [email(1, realUrl!), email(2, realUrl!), email(3, realUrl!)],
-          linkedin_message: "Saw how your team handles onboarding — happy to share what similar teams automated first.",
+          linkedin_message: "Hi [Name], saw how your team handles onboarding — happy to share what similar teams automated first.",
+          linkedin_personalization_note: "Onboarding tools listed on their about page.",
         });
         check("accepts a clean, fully-cited sequence", r.isError !== true, text(r).slice(0, 160));
+        const { data: li } = await db.from("outreach_drafts").select("personalization_note")
+          .eq("run_id", run.id).eq("channel", "linkedin").maybeSingle();
+        check("  stores the LinkedIn personalization note", Boolean(li?.personalization_note), li);
+        check("  stamps notes with the date the page was read", /\(page read \d{4}-\d{2}-\d{2}\)/.test(li?.personalization_note ?? ""), li?.personalization_note);
         const { count: dc } = await db.from("outreach_drafts").select("id", { count: "exact", head: true }).eq("run_id", run.id);
         check("  stores 3 emails + 1 linkedin", dc === 4, dc);
       }
@@ -228,7 +245,8 @@ async function main() {
         const r = await call("save_outreach_drafts", {
           company_domain: "iana.org",
           emails: [email(1, realUrl!), email(2, realUrl!), email(3, realUrl!)],
-          linkedin_message: "Saw how your team handles onboarding — happy to share what similar teams automated first.",
+          linkedin_message: "Hi [Name], saw how your team handles onboarding — happy to share what similar teams automated first.",
+          linkedin_personalization_note: "Onboarding tools listed on their about page.",
         });
         check("refuses drafts for a lead that is not qualified", /not qualified/.test(text(r)), text(r).slice(0, 160));
       }

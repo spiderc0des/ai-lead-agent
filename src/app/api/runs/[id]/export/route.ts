@@ -3,6 +3,7 @@ import { requireUser, authErrorResponse } from "@/lib/auth";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import type { Icp } from "@/lib/schemas";
 import { effectiveObjective } from "@/lib/objective-server";
+import { leadWorkbook, type WorkbookLead } from "@/lib/lead-workbook";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -30,9 +31,15 @@ type Draft = {
 };
 
 /**
- * Two deliverables from one place:
- *   ?format=md   the outreach sample pack a reviewer reads
- *   ?format=csv  the qualified lead list
+ * Deliverables from one place:
+ *   ?format=md    the outreach sample pack a reviewer reads
+ *   ?format=xlsx  the lead list: a Qualified sheet and a Needs review sheet
+ *   ?format=csv   the qualified leads alone, for tools that only take CSV
+ *
+ * Needs-review leads get their own sheet rather than a status column because
+ * they are a to-do list for a person, not part of the list: the quality guide
+ * says they never count as qualified, and mixing them in invites someone to
+ * sort by company and mail all of them.
  */
 export async function GET(request: Request, ctx: { params: Promise<{ id: string }> }) {
   try {
@@ -57,10 +64,22 @@ export async function GET(request: Request, ctx: { params: Promise<{ id: string 
         "id, company_name, company_domain, qualification_status, confidence, fit_reasons, concerns, source_urls, source_summary",
       )
       .eq("run_id", id)
-      .eq("qualification_status", "qualified")
+      .in("qualification_status", ["qualified", "needs_review"])
       .order("company_name");
 
-    const leads = (leadRows ?? []) as Lead[];
+    const allLeads = (leadRows ?? []) as Lead[];
+    const leads = allLeads.filter((l) => l.qualification_status === "qualified");
+    const needsReview = allLeads.filter((l) => l.qualification_status === "needs_review");
+
+    if (format === "xlsx") {
+      const body = await leadWorkbook(leads as WorkbookLead[], needsReview as WorkbookLead[]);
+      return new NextResponse(body, {
+        headers: {
+          "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+          "Content-Disposition": `attachment; filename="leads-${id.slice(0, 8)}.xlsx"`,
+        },
+      });
+    }
 
     if (format === "csv") {
       const header = [
@@ -217,7 +236,10 @@ export async function GET(request: Request, ctx: { params: Promise<{ id: string 
       }
 
       const li = leadDrafts.find((d) => d.channel === "linkedin");
-      if (li) out.push(`**LinkedIn message**`, ``, "```", li.body, "```", ``);
+      if (li) {
+        out.push(`**LinkedIn message**`, ``, "```", li.body, "```", ``);
+        if (li.personalization_note) out.push(`Personalisation: ${li.personalization_note}`, ``);
+      }
 
       out.push(`---`, ``);
     }

@@ -15,6 +15,7 @@ import {
 import { CreateRunSchema, RunLimitsSchema, DEFAULT_LIMITS } from "@/lib/schemas";
 import { composeObjective, answersFromEvents, leadCountFromObjective } from "@/lib/objective";
 import { deriveMaxTurns } from "@/lib/schemas";
+import { draftFormatProblems } from "@/lib/draft-format";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 
@@ -155,6 +156,21 @@ console.log("\n== scrape target guard ==");
     ok = false;
   }
   check("allows a public https URL", ok);
+}
+
+
+console.log("\n== outreach draft format ==");
+{
+  const mk = (n: number, body: string) => ({ step_number: n, subject: "s", body, personalization_note: "note here", evidence_url: "https://a.example" });
+  const good = (n: number) => mk(n, `Hi [Name],\n\nSaw your careers page${n === 1 ? " — I'm with Koya" : ""}. Is that right?\n\nBest,\n[Your name]`);
+  const ok = draftFormatProblems({ emails: [good(1), good(2), good(3)], linkedin_message: "Hi [Name], saw your careers page." });
+  check("a placeholder-greeted, signed, Koya-naming sequence passes", ok.length === 0, ok);
+  const dash = draftFormatProblems({ emails: [mk(1, "Hi — saw your page. I'm with Koya.\n\n[Your name]"), good(2), good(3)], linkedin_message: "Hi [Name], x" });
+  check("'Hi —' without [Name] is rejected", dash.some((p) => /Email 1 must open/.test(p)), dash);
+  const noKoya = draftFormatProblems({ emails: [mk(1, "Hi [Name],\n\nI place assistants.\n\n[Your name]"), good(2), good(3)], linkedin_message: "Hi [Name], x" });
+  check("email 1 without Koya is rejected", noKoya.some((p) => /name Koya/.test(p)), noKoya);
+  const unsigned = draftFormatProblems({ emails: [good(1), mk(2, "Hi [Name],\n\nFollowing up."), good(3)], linkedin_message: "Hello there" });
+  check("an unsigned email and a nameless LinkedIn note are both rejected", unsigned.length === 2, unsigned);
 }
 
 console.log("\n== objective shape guard ==");

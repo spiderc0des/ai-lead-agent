@@ -189,8 +189,20 @@ export const OutreachShape = {
     .string()
     .min(20)
     .max(600)
-    .describe("Short connection note. Same evidence rules as the emails."),
+    .describe("Short connection note opening 'Hi [Name],'. Same evidence rules as the emails."),
+  linkedin_personalization_note: z
+    .string()
+    .min(10)
+    .describe("Which company detail the LinkedIn note leans on, and where it came from"),
 } as const;
+
+/**
+ * Placeholders the reviewer fills in. The agent never looks up a contact, so
+ * it cannot know who the email goes to — a visible `[Name]` is honest, where
+ * "Hi —" reads as a mass mailing and a guessed name would be invented.
+ */
+export const NAME_PLACEHOLDER = "[Name]";
+export const SENDER_PLACEHOLDER = "[Your name]";
 
 export const OutreachSchema = z.object(OutreachShape);
 export type OutreachInput = z.infer<typeof OutreachSchema>;

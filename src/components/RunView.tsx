@@ -136,6 +136,7 @@ export function RunView({ runId }: { runId: string }) {
         objective={objective}
         live={live || run.status === "needs_clarification" || run.status === "awaiting_confirmation"}
         hasQualified={qualified.length > 0}
+        hasLeadList={leads.some((l) => l.qualification_status === "qualified" || l.qualification_status === "needs_review")}
         logOpen={logOpen}
         onToggleLog={() => setLogOpen((o) => !o)}
         logCount={events.length}

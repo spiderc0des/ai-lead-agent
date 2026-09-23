@@ -89,7 +89,7 @@ Short, lowercase-ish, concrete. Naming the specific thing you noticed beats desc
 
 - **The diagnosis you cannot support.** "That kind of growth usually means someone is stretched across repetitive work." You do not know that. Say what you saw, then ask — do not tell them what is happening inside their company.
 - **"I'd guess…"** followed by a paragraph about their operations. Guessing at length is still guessing.
-- **The brochure sentence.** "Koya places trained AI automation assistants with early-stage teams like yours to take on exactly that kind of workflow." Nobody writes that to one person. Try: "I place AI automation assistants with teams around your size."
+- **The brochure sentence.** "Koya places trained AI automation assistants with early-stage teams like yours to take on exactly that kind of workflow." Nobody writes that to one person. Try: "I'm with Koya — we place AI automation assistants with teams around your size." Name Koya once, in email 1, as who you are; not as a brand to sell.
 - **Stacked em-dash asides.** One per email at most. Three makes it an essay.
 - **Tricolon lists.** "answering the same setup questions, triaging trial signups, prepping reporting" is a copywriter's rhythm, not speech.
 - **"Worth a quick conversation about…"** and "happy to find 15 minutes". Just ask the question.
@@ -102,14 +102,24 @@ Short, lowercase-ish, concrete. Naming the specific thing you noticed beats desc
 
 > **Subject:** Ashby + Breezy + Zapier
 >
-> Hi — saw on your About page that Truffle is self-funded and remote-first, with three people listed, and that you're wiring together Ashby, Breezy and Zapier.
+> Hi [Name],
 >
-> I place AI automation assistants with teams about that size, usually to take over the repetitive parts of onboarding and support. Is that actually where your time is going at the moment, or is it somewhere else?
+> Saw on your About page that Truffle is self-funded and remote-first, with three people listed, and that you're wiring together Ashby, Breezy and Zapier.
+>
+> I'm with Koya — we place AI automation assistants with teams about that size, usually to take over the repetitive parts of onboarding and support. Is that actually where your time is going at the moment, or is it somewhere else?
 >
 > Best,
 > [Your name]
 
 Everything factual in it points at a page you read. Nothing claims to know how the company feels.
+
+**Greeting and sign-off.** Every email opens `Hi [Name],` on its own line and ends with `[Your name]` on the last line. The run never looks up a contact, so the reviewer fills in both; "Hi —" reads like a mass mailing and a guessed name would be invented. The LinkedIn note opens `Hi [Name],` too. The tool rejects drafts without them.
+
+**Every email needs its own detail, including the follow-ups.** Email 2 is where drafts go generic: "one pattern I see with small teams like yours…" fits every company on the list. Anchor it on a different fact from the pages you read — a specific open role, a named tool, a line from their pricing or onboarding page — and let the pattern follow from that fact. Email 3 may simply close the loop, but it still names the company.
+
+**Never pitch them the workflow they sell.** Read what the company's product does before choosing what to offer help with. A customer-success platform built around health scores does not do health-score reviews by hand; an AI-agent company does not need to hear about AI. Suggesting otherwise lands as "we built a product for exactly that" and ends the thread. Pick the work around their product instead — hiring, onboarding their own customers, sales admin, content — and only what the page gives you a reason to mention.
+
+**Time-sensitive facts.** Open roles, team counts and launch news go stale. Say what the page showed ("your careers page lists…"), not that it is true today, and name the page in the personalization note. The tool stamps each note with the date the page was read so the reviewer can check it is still current.
 
 ## How to use this in a run
 
@@ -119,6 +129,6 @@ Each step carries an `evidence_url`, and it must be one of that lead's `source_u
 
 **What you are offering.** Koya Talent places trained AI automation assistants with founders, operators and agency owners — a person who automates repetitive workflows and builds internal AI-enabled systems, not a software product. Write accordingly: no feature lists, no "our platform".
 
-**Hard rules the tool enforces.** No email address may appear anywhere in the copy, in any form. Nothing is ever sent; these are drafts for a human to review, edit, and decide on.
+**Hard rules the tool enforces.** No email address may appear anywhere in the copy, in any form. Every email opens with a `[Name]` greeting and ends with `[Your name]`; email 1 names Koya; the LinkedIn message has its own `linkedin_personalization_note`. Nothing is ever sent; these are drafts for a human to review, edit, and decide on.
 
-Before you submit, read email 1 back and ask whether it could have been sent to any other company on the list. If it could, the personalisation is not doing its job — go back to the source summary and find the specific detail.
+Before you submit, read each email back — email 2 especially — and ask whether it could have been sent to any other company on the list. If it could, the personalisation is not doing its job — go back to the source summary and find the specific detail.
