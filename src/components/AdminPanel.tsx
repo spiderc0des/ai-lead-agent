@@ -12,15 +12,24 @@ type Budget = {
   agent_spent_usd: number;
   agent_reserved_usd: number;
   runs_paused: boolean;
+  /** Absent until 0007_workers.sql is applied. */
+  max_concurrent_runs?: number;
+  max_runs_per_user?: number;
 };
 
-export function AdminPanel({ budget }: { budget: Budget }) {
+const WORKER_CEILING = 8;
+const PER_USER_CEILING = 5;
+
+export function AdminPanel({ budget, runningNow }: { budget: Budget; runningNow: number }) {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [note, setNote] = useState<string | null>(null);
   const [apifyCap, setApifyCap] = useState(budget.apify_cap_usd);
   const [agentCap, setAgentCap] = useState(budget.agent_cap_usd);
   const [busy, setBusy] = useState(false);
+  const workerColumnsExist = budget.max_concurrent_runs !== undefined;
+  const [workers, setWorkers] = useState(budget.max_concurrent_runs ?? 2);
+  const [perUser, setPerUser] = useState(budget.max_runs_per_user ?? 1);
 
   async function post(url: string, body: unknown) {
     setBusy(true);
@@ -108,6 +117,71 @@ export function AdminPanel({ budget }: { budget: Budget }) {
             onConfirm={() => post("/api/admin/budget", { runs_paused: !budget.runs_paused })}
           />
         </div>
+      </section>
+
+      <section className="card">
+        <h2 className="text-sm font-semibold">Workers</h2>
+        <p className="hint">
+          How many runs execute at once, and how many one person may have going. Runs beyond either
+          limit wait in the queue and start as a slot frees up.
+        </p>
+
+        {!workerColumnsExist && (
+          <p className="panel panel-warning mt-3">
+            Apply <code>supabase/migrations/0007_workers.sql</code> to change these. Until then the app
+            uses {budget.max_concurrent_runs ?? 2} workers and one run per person.
+          </p>
+        )}
+
+        <div className="mt-4 flex flex-wrap items-end gap-4">
+          <label className="text-xs">
+            <span className="label">Workers (all users)</span>
+            <input
+              type="number"
+              min={1}
+              max={WORKER_CEILING}
+              value={workers}
+              disabled={!workerColumnsExist}
+              onChange={(e) => setWorkers(Number(e.target.value))}
+              className="field mt-1 w-28"
+            />
+          </label>
+          <label className="text-xs">
+            <span className="label">Runs per person</span>
+            <input
+              type="number"
+              min={1}
+              max={Math.min(PER_USER_CEILING, workers)}
+              value={perUser}
+              disabled={!workerColumnsExist}
+              onChange={(e) => setPerUser(Number(e.target.value))}
+              className="field mt-1 w-28"
+            />
+          </label>
+          <button
+            disabled={
+              busy ||
+              !workerColumnsExist ||
+              workers < 1 ||
+              workers > WORKER_CEILING ||
+              perUser < 1 ||
+              perUser > PER_USER_CEILING
+            }
+            onClick={() =>
+              post("/api/admin/budget", { max_concurrent_runs: workers, max_runs_per_user: perUser })
+            }
+            className="btn btn-primary btn-sm"
+          >
+            Save workers
+          </button>
+        </div>
+
+        <p className="hint mt-3">
+          {runningNow} running now. Each worker runs its own Claude Code process, roughly 300-400 MB of
+          memory, so the container&apos;s memory is the real ceiling — on 1 GB, more than 2 or 3 at once
+          risks it being killed mid-run.
+          {perUser > workers && " Runs per person above the worker count has no effect."}
+        </p>
       </section>
 
       <section className="card">

@@ -6,6 +6,7 @@ import { budgetStatus, reserveBudget, releaseBudget } from "@/agent/budget";
 import { pumpQueue } from "@/agent/queue";
 import { APIFY_MIN_RUN_CHARGE_USD } from "@/lib/apify";
 import { recordRunEvent } from "@/lib/run-events";
+import { getRunSettings, activeRunsFor } from "@/lib/settings";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -34,20 +35,17 @@ export async function POST(request: Request) {
 
     const limits = RunLimitsSchema.parse({ ...DEFAULT_LIMITS, ...parsed.data.limits });
 
-    // One run at a time per person: the worker pool is shared, and a queue of
-    // ten runs from one user would starve everyone else.
-    const { data: existing } = await supabaseAdmin()
-      .from("runs")
-      .select("id, status")
-      .eq("user_id", user.id)
-      .in("status", ["queued", "running"])
-      .maybeSingle();
-
-    if (existing) {
+    // A per-person cap on active runs, set by an admin: the worker pool is
+    // shared, and one person queueing ten runs would starve everyone else.
+    const { maxRunsPerUser } = await getRunSettings();
+    const active = await activeRunsFor(user.id);
+    if (active >= maxRunsPerUser) {
       return NextResponse.json(
         {
-          error: `You already have a run ${existing.status}. Wait for it to finish or cancel it first.`,
-          runId: existing.id,
+          error:
+            maxRunsPerUser === 1
+              ? "You already have a run in progress. Wait for it to finish or cancel it first."
+              : `You already have ${active} runs in progress, the most allowed per person. Wait for one to finish first.`,
         },
         { status: 409 },
       );

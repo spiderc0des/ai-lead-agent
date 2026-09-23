@@ -6,6 +6,7 @@ import { RunLimitsSchema } from "@/lib/schemas";
 import { budgetStatus, reserveBudget, releaseBudget } from "@/agent/budget";
 import { pumpQueue } from "@/agent/queue";
 import { recordRunEvent } from "@/lib/run-events";
+import { getRunSettings, activeRunsFor } from "@/lib/settings";
 
 export const runtime = "nodejs";
 
@@ -54,17 +55,11 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
       );
     }
 
-    // The owner's one-at-a-time rule still applies to the resumed session.
-    const { data: active } = await db
-      .from("runs")
-      .select("id")
-      .eq("user_id", run.user_id)
-      .in("status", ["queued", "running"])
-      .neq("id", id)
-      .maybeSingle();
-    if (active) {
+    // The owner's per-person limit applies to the resumed session too.
+    const { maxRunsPerUser } = await getRunSettings();
+    if ((await activeRunsFor(run.user_id, id)) >= maxRunsPerUser) {
       return NextResponse.json(
-        { error: "Another run is already in progress. Wait for it to finish first." },
+        { error: "The most runs allowed per person are already in progress. Wait for one to finish first." },
         { status: 409 },
       );
     }

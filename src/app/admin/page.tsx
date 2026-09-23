@@ -42,7 +42,14 @@ export default async function AdminPage() {
       <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-8 sm:px-6">
         <h1 className="text-lg font-semibold">Admin</h1>
 
-        <div className="mt-6">{budget && <AdminPanel budget={budget} />}</div>
+        <div className="mt-6">
+          {budget && (
+            <AdminPanel
+              budget={budget}
+              runningNow={(runs ?? []).filter((r) => r.status === "running").length}
+            />
+          )}
+        </div>
 
         <div className="mt-6 space-y-4">
         <Collapsible title="All runs" count={runs?.length ?? 0} defaultOpen subtitle="every user">

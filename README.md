@@ -36,6 +36,7 @@ supabase/migrations/0003_budget.sql        shared spend ledger
 supabase/migrations/0004_clarification.sql lets a run stop and ask
 supabase/migrations/0005_continue.sql      approve an ICP, and answer a run
 supabase/migrations/0006_run_log.sql       resume in place, and the run log
+supabase/migrations/0007_workers.sql       worker and per-person limits, set from /admin
 ```
 
 The last two add run statuses. Until they are applied, the tool suite skips the

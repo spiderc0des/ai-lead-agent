@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { currentProfile } from "@/lib/auth";
-import { supabaseServer } from "@/lib/supabase/server";
+import { getRunSettings, activeRunsFor } from "@/lib/settings";
 import { AppHeader } from "@/components/AppHeader";
 import { NewRunForm } from "@/components/NewRunForm";
 
@@ -11,12 +11,8 @@ export default async function NewRunPage() {
   const profile = await currentProfile();
   if (!profile) redirect("/login");
 
-  const supabase = await supabaseServer();
-  const { data: active } = await supabase
-    .from("runs")
-    .select("id")
-    .in("status", ["queued", "running"])
-    .limit(1);
+  const { maxRunsPerUser } = await getRunSettings();
+  const active = await activeRunsFor(profile.id);
 
   return (
     <>
@@ -27,7 +23,7 @@ export default async function NewRunPage() {
         </Link>
         <h1 className="mt-3 text-lg font-semibold">New run</h1>
         <div className="mt-4">
-          <NewRunForm hasActiveRun={(active?.length ?? 0) > 0} />
+          <NewRunForm activeRuns={active} maxRunsPerUser={maxRunsPerUser} />
         </div>
       </main>
     </>

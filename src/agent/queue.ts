@@ -2,12 +2,15 @@ import "server-only";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { runAgent, activeRunCount, isRunning } from "@/agent/run-agent";
 import { settleBudget } from "@/agent/budget";
+import { getRunSettings, type RunSettings } from "@/lib/settings";
+import { recordRunEvent } from "@/lib/run-events";
 
 /**
  * Run scheduling.
  *
  * Several people share this app and each run spawns a Claude Code subprocess,
- * so runs are queued rather than started on demand. Without this, three users
+ * so runs are queued rather than started on demand. Both limits — total
+ * workers and runs per person — are admin settings (see lib/settings.ts). Without this, three users
  * clicking Start at once would put three agent processes in one container.
  *
  * Scope: correct for a SINGLE process. The claim below is atomic against the
@@ -15,10 +18,7 @@ import { settleBudget } from "@/agent/budget";
  * container replicas could. Scaling out would need a Postgres advisory lock.
  */
 
-export function maxConcurrentRuns(): number {
-  const raw = Number(process.env.MAX_CONCURRENT_RUNS);
-  return Number.isFinite(raw) && raw > 0 ? Math.floor(raw) : 2;
-}
+
 
 /** A run is presumed dead if it has not touched heartbeat_at in this long. */
 const HEARTBEAT_STALE_MS = 3 * 60 * 1000;
@@ -36,8 +36,11 @@ export async function pumpQueue(): Promise<void> {
   pumping = true;
 
   try {
-    while (activeRunCount() < maxConcurrentRuns()) {
-      const claimed = await claimNextRun();
+    // Read once per pump, so an admin raising the worker count takes effect
+    // on the next pump rather than the next deploy.
+    const settings = await getRunSettings();
+    while (activeRunCount() < settings.maxConcurrentRuns) {
+      const claimed = await claimNextRun(settings);
       if (!claimed) break;
 
       // Deliberately not awaited: runAgent owns the run's whole lifecycle and
@@ -61,7 +64,7 @@ export async function pumpQueue(): Promise<void> {
  * The claim is a conditional UPDATE, so if two callers race for the same row
  * the loser gets zero rows back and moves on to the next one.
  */
-async function claimNextRun(): Promise<string | null> {
+async function claimNextRun(settings: RunSettings): Promise<string | null> {
   const { data: queued, error } = await supabaseAdmin()
     .from("runs")
     .select("id, user_id")
@@ -75,11 +78,11 @@ async function claimNextRun(): Promise<string | null> {
   }
   if (!queued?.length) return null;
 
-  // One active run per user, so nobody can monopolise the workers.
-  const busyUsers = await activeUserIds();
+  // A per-person cap on RUNNING runs, so nobody can monopolise the workers.
+  const running = await runningCountByUser();
 
   for (const run of queued) {
-    if (busyUsers.has(run.user_id)) continue;
+    if ((running.get(run.user_id) ?? 0) >= settings.maxRunsPerUser) continue;
     if (isRunning(run.id)) continue;
 
     const { data: claimedRow } = await supabaseAdmin()
@@ -96,12 +99,14 @@ async function claimNextRun(): Promise<string | null> {
   return null;
 }
 
-async function activeUserIds(): Promise<Set<string>> {
+async function runningCountByUser(): Promise<Map<string, number>> {
   const { data } = await supabaseAdmin()
     .from("runs")
     .select("user_id")
     .eq("status", "running");
-  return new Set((data ?? []).map((r) => r.user_id));
+  const counts = new Map<string, number>();
+  for (const r of data ?? []) counts.set(r.user_id, (counts.get(r.user_id) ?? 0) + 1);
+  return counts;
 }
 
 /** How many runs are ahead of this one, for the waiting-room message. */
@@ -163,6 +168,9 @@ export async function sweepOrphanedRuns(): Promise<number> {
 
     if (updated?.id) {
       reclaimed++;
+      await recordRunEvent(run.id, run.user_id, "failed", null, {
+        reason: "The server restarted while this run was in progress. Partial results are still stored.",
+      });
       // What the crashed SESSION held and spent. A resumed run's earlier
       // sessions were already settled, so only the increment since the last
       // baseline belongs to this one.
@@ -196,19 +204,39 @@ export async function sweepOrphanedRuns(): Promise<number> {
 
 let bootstrapped = false;
 
-/**
- * Called once per process from instrumentation.ts: clean up anything the
- * previous process left behind, then start whatever is waiting.
- */
-export async function bootstrapQueue(): Promise<void> {
-  if (bootstrapped) return;
-  bootstrapped = true;
+/** How often the sweep re-runs after boot. */
+const SWEEP_INTERVAL_MS = 60 * 1000;
 
+async function sweepAndPump(): Promise<void> {
   try {
     const reclaimed = await sweepOrphanedRuns();
     if (reclaimed > 0) console.log(`[queue] reclaimed ${reclaimed} orphaned run(s)`);
     await pumpQueue();
   } catch (err) {
-    console.error("[queue] bootstrap failed:", err);
+    console.error("[queue] sweep failed:", err);
   }
+}
+
+/**
+ * Called once per process from instrumentation.ts: clean up anything the
+ * previous process left behind, start whatever is waiting — and keep doing
+ * both every minute.
+ *
+ * Sweeping only at boot was a bug. A run killed by a restart still has a fresh
+ * heartbeat at the moment the new process boots, so the boot sweep always
+ * skips it, and it then sat in `running` — holding its budget reservation and
+ * its owner's run slot — until some later restart happened to come along more
+ * than three minutes after it died. The periodic sweep reclaims it within
+ * about four minutes instead. The staleness threshold stays, because on a
+ * rolling deploy the old container can still be running when the new one
+ * boots, and its runs are alive.
+ */
+export async function bootstrapQueue(): Promise<void> {
+  if (bootstrapped) return;
+  bootstrapped = true;
+
+  await sweepAndPump();
+  const timer = setInterval(() => void sweepAndPump(), SWEEP_INTERVAL_MS);
+  // Never the reason the process stays up.
+  timer.unref?.();
 }

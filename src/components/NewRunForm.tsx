@@ -57,7 +57,14 @@ const LIMIT_FIELDS = [
   },
 ] as const;
 
-export function NewRunForm({ hasActiveRun }: { hasActiveRun: boolean }) {
+export function NewRunForm({
+  activeRuns,
+  maxRunsPerUser,
+}: {
+  activeRuns: number;
+  maxRunsPerUser: number;
+}) {
+  const hasActiveRun = activeRuns >= maxRunsPerUser;
   const router = useRouter();
   const [objective, setObjective] = useState("");
   const [limits, setLimits] = useState<RunLimits>(DEFAULT_LIMITS);
@@ -185,7 +192,9 @@ export function NewRunForm({ hasActiveRun }: { hasActiveRun: boolean }) {
 
       {hasActiveRun && (
         <p className="panel panel-warning mt-3">
-          You already have a run in progress. One at a time — the workers are shared.
+          {maxRunsPerUser === 1
+            ? "You already have a run in progress. One at a time — the workers are shared."
+            : `You have ${activeRuns} runs in progress, the most allowed per person. Wait for one to finish.`}
         </p>
       )}
       {budget?.runs_paused && (
