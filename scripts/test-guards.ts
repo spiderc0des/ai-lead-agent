@@ -13,6 +13,7 @@ import {
   assertPublicHttpUrl,
 } from "@/lib/domain";
 import { CreateRunSchema } from "@/lib/schemas";
+import { composeObjective, answersFromEvents } from "@/lib/objective";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 
@@ -172,6 +173,30 @@ console.log("\n== objective shape guard ==");
   for (const o of accept) {
     check(`accepts ${JSON.stringify(o)}`, CreateRunSchema.safeParse({ objective: o }).success);
   }
+}
+
+console.log("\n== the working objective ==");
+{
+  const original = "companies businesses.";
+  check("no answers: the original stands", composeObjective(original, []) === original);
+
+  const answers = [
+    { question: "Which industry?", answer: "digital marketing agencies" },
+    { question: "Where?", answer: "United States" },
+    { question: "Skipped one", answer: "   " },
+  ];
+  const composed = composeObjective(original, answers);
+  check("answers replace the original", composed === "digital marketing agencies; United States", composed);
+  check("  and the original wording is not carried into it", !composed.includes("companies businesses"));
+
+  // Two rounds of questions accumulate, oldest first.
+  const events = [
+    { kind: "created", detail: { objective: original } },
+    { kind: "answered", detail: { answers: [answers[0]] } },
+    { kind: "needs_clarification", detail: { questions: ["Where?"] } },
+    { kind: "answered", detail: { answers: [answers[1]] } },
+  ];
+  check("answers from every round, in order", composeObjective(original, answersFromEvents(events)) === "digital marketing agencies; United States");
 }
 
 console.log("\n== injection honeypot fixture ==");

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { requireUser, authErrorResponse } from "@/lib/auth";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import type { Icp } from "@/lib/schemas";
+import { effectiveObjective } from "@/lib/objective-server";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -110,6 +111,7 @@ export async function GET(request: Request, ctx: { params: Promise<{ id: string 
     }
 
     const icp = run.icp as Icp | null;
+    const objective = await effectiveObjective(supabaseAdmin(), run);
     const out: string[] = [
       `# Outreach sample pack`,
       ``,
@@ -121,7 +123,7 @@ export async function GET(request: Request, ctx: { params: Promise<{ id: string 
       ``,
       `## Qualification objective`,
       ``,
-      `> ${run.objective.replace(/\n/g, "\n> ")}`,
+      `> ${objective.replace(/\n/g, "\n> ")}`,
       ``,
     ];
 

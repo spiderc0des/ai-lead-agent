@@ -6,6 +6,7 @@ import { AppHeader } from "@/components/AppHeader";
 import { OutreachCard, type Draft } from "@/components/OutreachCard";
 import { CopyButton } from "@/components/CopyButton";
 import type { Icp } from "@/lib/schemas";
+import { effectiveObjective } from "@/lib/objective-server";
 
 export const dynamic = "force-dynamic";
 
@@ -50,6 +51,7 @@ export default async function PackPage({ params }: { params: Promise<{ id: strin
   for (const d of (draftRows ?? []) as Draft[]) byLead.set(d.lead_id, [...(byLead.get(d.lead_id) ?? []), d]);
 
   const icp = run.icp as Icp | null;
+  const objective = await effectiveObjective(db, run);
 
   return (
     <>
@@ -82,9 +84,9 @@ export default async function PackPage({ params }: { params: Promise<{ id: strin
         <section className="card mt-5">
           <div className="flex items-start justify-between gap-2">
             <h2 className="label mb-0">Qualification objective</h2>
-            <CopyButton value={run.objective} />
+            <CopyButton value={objective} />
           </div>
-          <p className="mt-1.5 text-sm">{run.objective}</p>
+          <p className="mt-1.5 text-sm">{objective}</p>
 
           {icp && (
             <dl className="mt-4 grid gap-x-6 gap-y-2 text-sm sm:grid-cols-2">

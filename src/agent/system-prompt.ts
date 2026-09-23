@@ -76,9 +76,11 @@ export function buildPrompt(
   opts: {
     icpAlreadyApproved?: boolean;
     answers?: { question: string; answer: string }[];
+    /** The wording the person first gave, when their answers have replaced it. */
+    originalObjective?: string;
   } = {},
 ): string {
-  const { icpAlreadyApproved = false, answers = [] } = opts;
+  const { icpAlreadyApproved = false, answers = [], originalObjective } = opts;
 
   const header = `Qualification objective:
 
@@ -92,11 +94,11 @@ ${objective}
   const replies = answers.length
     ? `
 
-Earlier in this run you stopped to ask for clarification. The person replied:
+This objective came from the person's answers to your clarification questions. Their original wording${originalObjective ? `, "${originalObjective}",` : ""} could not be searched and has been replaced — do not work from it. For context, the questions and answers were:
 
 ${answers.map((a) => `- ${a.question}\n  -> ${a.answer}`).join("\n")}
 
-Treat these replies as part of the objective: anything stated here is a user_stated constraint.`
+Everything the person states here is a user_stated constraint.`
     : "";
 
   if (icpAlreadyApproved) {

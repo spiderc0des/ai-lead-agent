@@ -4,6 +4,7 @@ import { currentProfile } from "@/lib/auth";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { AppHeader } from "@/components/AppHeader";
 import { Collapsible } from "@/components/Collapsible";
+import { effectiveObjectives } from "@/lib/objective-server";
 import { AdminPanel } from "@/components/AdminPanel";
 import { StatusPill } from "@/components/StatusPill";
 
@@ -33,6 +34,7 @@ export default async function AdminPage() {
     ]);
 
   const emailById = new Map((people ?? []).map((p) => [p.id, p.email]));
+  const objectives = await effectiveObjectives(db, runs ?? []);
 
   return (
     <>
@@ -64,7 +66,7 @@ export default async function AdminPage() {
                     <td className="text-xs">{emailById.get(r.user_id) ?? "—"}</td>
                     <td className="max-w-md truncate">
                       <Link href={`/runs/${r.id}`} style={{ color: "var(--accent)" }}>
-                        {r.objective}
+                        {objectives.get(r.id) ?? r.objective}
                       </Link>
                     </td>
                     <td >

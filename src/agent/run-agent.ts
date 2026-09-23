@@ -10,6 +10,8 @@ import { logToolCall } from "@/agent/tool-logger";
 import { emptyTally, estimateCostUsd, type TokenTally } from "@/agent/pricing";
 import { sendRunFinished } from "@/lib/email";
 import { recordRunEvent, type RunEventKind } from "@/lib/run-events";
+import { composeObjective } from "@/lib/objective";
+import { effectiveObjective } from "@/lib/objective-server";
 
 /** The five skills built from the guidance docs in assets/. */
 export const REQUIRED_SKILLS = [
@@ -179,7 +181,11 @@ export async function runAgent(runId: string): Promise<TerminalStatus> {
     let sawResult = false;
 
     const stream = query({
-      prompt: buildPrompt(ctx.objective, { icpAlreadyApproved, answers }),
+      prompt: buildPrompt(composeObjective(ctx.objective, answers), {
+        icpAlreadyApproved,
+        answers,
+        originalObjective: ctx.objective,
+      }),
       options: {
         model,
         cwd: agentCwd(),
@@ -358,7 +364,7 @@ async function notifyOwner(runId: string, terminal: TerminalStatus): Promise<voi
 
     const outcome = await sendRunFinished(profile.email, {
       runId,
-      objective: run.objective,
+      objective: await effectiveObjective(db, run),
       status: run.status ?? terminal,
       statusReason: run.status_reason ?? null,
       qualified: await countOf("leads", ["qualification_status", "qualified"]),

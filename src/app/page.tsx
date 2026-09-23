@@ -4,6 +4,7 @@ import { currentProfile } from "@/lib/auth";
 import { supabaseServer } from "@/lib/supabase/server";
 import { AppHeader } from "@/components/AppHeader";
 import { RunsList, type RunRow } from "@/components/RunsList";
+import { effectiveObjectives } from "@/lib/objective-server";
 
 export const dynamic = "force-dynamic";
 
@@ -31,9 +32,14 @@ export default async function RunsPage() {
     qualifiedByRun.set(l.run_id as string, (qualifiedByRun.get(l.run_id as string) ?? 0) + 1);
   }
 
+  const objectives = await effectiveObjectives(
+    supabase,
+    (runs ?? []).map((r) => ({ id: r.id as string, objective: r.objective as string })),
+  );
+
   const rows: RunRow[] = (runs ?? []).map((r) => ({
     id: r.id as string,
-    objective: r.objective as string,
+    objective: objectives.get(r.id as string) ?? (r.objective as string),
     status: r.status as string,
     created_at: r.created_at as string,
     total_cost_usd: r.total_cost_usd as number | null,

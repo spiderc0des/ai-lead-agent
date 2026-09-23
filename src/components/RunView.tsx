@@ -10,6 +10,7 @@ import { type Draft } from "@/components/OutreachCard";
 import { LeadList } from "@/components/LeadList";
 import { RunResponse } from "@/components/RunResponse";
 import { RunLog, type RunEvent } from "@/components/RunLog";
+import { answersFromEvents, composeObjective } from "@/lib/objective";
 import type { Icp, RunLimits } from "@/lib/schemas";
 
 type Run = {
@@ -109,6 +110,9 @@ export function RunView({ runId }: { runId: string }) {
   if (!run) return <p className="text-sm" style={{ color: "var(--ink-faint)" }}>Loading run…</p>;
 
   const qualified = leads.filter((l) => l.qualification_status === "qualified");
+  // The answers replace the original once given; the original lives in the log.
+  const objective = composeObjective(run.objective, answersFromEvents(events));
+  const refined = objective !== run.objective;
   const live = !TERMINAL.includes(run.status);
   const flagged = sources.filter((s) => s.injection_flags?.length);
 
@@ -129,7 +133,7 @@ export function RunView({ runId }: { runId: string }) {
 
       <RunActions
         runId={runId}
-        objective={run.objective}
+        objective={objective}
         live={live || run.status === "needs_clarification" || run.status === "awaiting_confirmation"}
         hasQualified={qualified.length > 0}
         logOpen={logOpen}
@@ -163,7 +167,15 @@ export function RunView({ runId }: { runId: string }) {
       <div className="grid gap-4 md:grid-cols-2">
         <div className="card">
           <h2 className="label">Qualification objective</h2>
-          <p className="text-sm">{run.objective}</p>
+          <p className="text-sm">{objective}</p>
+          {refined && (
+            <p className="hint">
+              From your answers.{" "}
+              <button type="button" className="underline underline-offset-2" onClick={() => setLogOpen(true)}>
+                Original wording is in the log.
+              </button>
+            </p>
+          )}
         </div>
         <div className="card">
           <h2 className="label">Refined ICP criteria</h2>
