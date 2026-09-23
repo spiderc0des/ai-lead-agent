@@ -3,6 +3,7 @@ const TONE: Record<string, string> = {
   running: "badge badge-accent",
   completed: "badge badge-success",
   needs_review: "badge badge-warning",
+  needs_clarification: "badge badge-warning",
   failed: "badge badge-danger",
   cancelled: "badge",
   qualified: "badge badge-success",

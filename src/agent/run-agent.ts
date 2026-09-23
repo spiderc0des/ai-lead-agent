@@ -44,7 +44,12 @@ export function activeRunCount(): number {
   return inFlight.size;
 }
 
-type TerminalStatus = "completed" | "needs_review" | "failed" | "cancelled";
+type TerminalStatus =
+  | "completed"
+  | "needs_review"
+  | "needs_clarification"
+  | "failed"
+  | "cancelled";
 
 /**
  * Execute one run to completion.
@@ -265,7 +270,11 @@ export async function runAgent(runId: string): Promise<TerminalStatus> {
     .eq("id", runId)
     .single();
 
-  if (finalRow?.status === "completed" || finalRow?.status === "needs_review") {
+  if (
+    finalRow?.status === "completed" ||
+    finalRow?.status === "needs_review" ||
+    finalRow?.status === "needs_clarification"
+  ) {
     terminal = finalRow.status;
     if (statusReason) {
       await supabaseAdmin()

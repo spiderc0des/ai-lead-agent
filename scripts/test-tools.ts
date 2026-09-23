@@ -16,7 +16,7 @@ import { buildLeadTools } from "@/agent/tools";
 import type { RunContext } from "@/agent/budget";
 import { DEFAULT_LIMITS } from "@/lib/schemas";
 
-let passed = 0, failed = 0;
+let passed = 0, failed = 0, skipped = 0;
 const results: string[] = [];
 
 function check(name: string, cond: boolean, detail?: unknown) {
@@ -72,15 +72,37 @@ async function main() {
       const bad = await call("set_icp", { target_company_type: "x" });
       check("rejects an incomplete ICP", bad.isError === true);
 
-      const good = await call("set_icp", {
+      const fullIcp = {
         target_company_type: "B2B SaaS company selling to operations teams",
         industries: ["field service management"], geography: ["United States"],
         headcount_range: "10-100 employees", buyer_persona: "Head of Operations",
         business_problem: "manual back-office workflows",
         hard_filters: ["US", "B2B", "SaaS", "10-100 employees"],
         soft_preferences: ["hiring ops roles"], disqualifiers: ["enterprise only"],
-      });
+        user_stated: ["US", "B2B", "SaaS", "10-100 employees"],
+        assumptions: ["Assumed ops-heavy verticals, since that is who feels the problem"],
+      };
+      const good = await call("set_icp", fullIcp);
       check("accepts a complete ICP", good.isError !== true, text(good).slice(0, 150));
+      check("  reports the hard/soft split back", /Soft preferences: 1/.test(text(good)), text(good).slice(0, 220));
+
+      const noProvenance = await call("set_icp", {
+        ...fullIcp, user_stated: undefined, assumptions: undefined,
+      });
+      check("rejects an ICP with no provenance", noProvenance.isError === true);
+
+      // Four hard filters from one stated constraint is the failure mode:
+      // inferences promoted to filters that silently reject wanted leads.
+      const promoted = await call("set_icp", {
+        ...fullIcp,
+        user_stated: ["United States"],
+        assumptions: ["Assumed B2B SaaS and a headcount band"],
+      });
+      check(
+        "warns when hard filters outnumber what the user stated",
+        /NOTE: you recorded 4 hard filters but the user only stated 1/.test(text(promoted)),
+        text(promoted).slice(0, 300),
+      );
     }
 
     /* ----------------------------------------- scrape provenance -------- */
@@ -216,6 +238,33 @@ async function main() {
       check("but needs_review is still allowed past the cap", r2.isError !== true, text(r2).slice(0, 120));
     }
 
+    /* -------------------------------------------- request_clarification -- */
+    console.log("\n== request_clarification ==");
+    {
+      const r = await call("request_clarification", {
+        reason: "The objective names a market Koya does not sell into, so no ICP is derivable.",
+        questions: ["Which industry should we target?", "What team size are you aiming at?"],
+      });
+
+      // This tool needs 0004_clarification.sql. Supabase's REST API cannot run
+      // DDL, so the migration is applied by hand — say so plainly rather than
+      // reporting a failure that is really a pending migration.
+      if (/clarification_questions/.test(text(r)) && /schema/.test(text(r))) {
+        console.log("  SKIP request_clarification — run supabase/migrations/0004_clarification.sql first");
+        skipped += 3;
+      } else {
+        check("records the questions", r.isError !== true, text(r).slice(0, 140));
+
+        const { data: after } = await db.from("runs")
+          .select("status, clarification_questions").eq("id", run.id).single();
+        check("  run marked needs_clarification", after?.status === "needs_clarification", after?.status);
+        check("  both questions stored", (after?.clarification_questions ?? []).length === 2, after?.clarification_questions);
+
+        // Put the run back so the remaining tests operate on a live run.
+        await db.from("runs").update({ status: "running", clarification_questions: null }).eq("id", run.id);
+      }
+    }
+
     /* --------------------------------------------- get_run_state -------- */
     console.log("\n== get_run_state ==");
     {
@@ -258,7 +307,7 @@ async function main() {
     console.log(`\ncleaned up test run ${run.id}`);
   }
 
-  console.log(`\n${passed} passed, ${failed} failed`);
+  console.log(`\n${passed} passed, ${failed} failed${skipped ? `, ${skipped} skipped (pending migration)` : ""}`);
   if (failed) console.log(`failures: ${results.join(", ")}`);
   process.exit(failed === 0 ? 0 : 1);
 }

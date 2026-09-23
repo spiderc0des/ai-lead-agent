@@ -60,11 +60,37 @@ export const IcpShape = {
     .describe("The operational problem that makes AI automation support relevant"),
   hard_filters: z
     .array(z.string())
-    .describe("Must ALL be true for a lead to qualify. Keep this list short."),
+    .describe(
+      "Must ALL be true for a lead to qualify. ONLY constraints the user actually stated, " +
+        "plus the baseline that the company is a real operating business. Anything you " +
+        "inferred belongs in soft_preferences — a filter the user never asked for silently " +
+        "narrows their search and rejects leads they wanted.",
+    ),
   soft_preferences: z
     .array(z.string())
     .describe("Improve fit but never disqualify on their own"),
   disqualifiers: z.array(z.string()).describe("Conditions that rule a company out"),
+
+  /* --- provenance -------------------------------------------------------
+   * Which parts of this ICP came from the person, and which the agent
+   * supplied. A vague objective is filled in from the business context, which
+   * is the right behaviour — but a reviewer has to be able to see where the
+   * criteria came from, or an inferred constraint is indistinguishable from
+   * one the user asked for.
+   */
+  user_stated: z
+    .array(z.string())
+    .describe(
+      "Constraints taken directly from the objective, quoted or closely paraphrased. " +
+        "For 'us business' this is just the geography. Empty is a valid answer.",
+    ),
+  assumptions: z
+    .array(z.string())
+    .describe(
+      "Everything you supplied that the user did not say, each with its reason — e.g. " +
+        "'Assumed small/lean teams: Koya sells AI automation assistants to founders and " +
+        "operators without dedicated ops staff.'",
+    ),
 } as const;
 
 export const IcpSchema = z.object(IcpShape);

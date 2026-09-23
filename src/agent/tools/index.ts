@@ -72,14 +72,37 @@ export function buildLeadTools(ctx: RunContext) {
           .eq("id", ctx.runId);
         if (error) throw new Error(`Could not save ICP: ${error.message}`);
 
+        // Surfaced back to the agent because promoting an inference to a hard
+        // filter is the easy mistake, and it silently rejects leads the user
+        // actually wanted.
+        const inferredHardFilters = Math.max(
+          0,
+          icp.hard_filters.length - icp.user_stated.length,
+        );
+        const note =
+          inferredHardFilters > 0 && icp.user_stated.length < icp.hard_filters.length
+            ? ` NOTE: you recorded ${icp.hard_filters.length} hard filters but the user only ` +
+              `stated ${icp.user_stated.length} constraint(s). Anything you inferred should be a ` +
+              `soft preference, not a hard filter — check before searching.`
+            : "";
+
         return {
           result: textResult(
             `ICP recorded. Hard filters (${icp.hard_filters.length}): ${icp.hard_filters.join("; ") || "none"}. ` +
+              `Soft preferences: ${icp.soft_preferences.length}. ` +
+              `From the user: ${icp.user_stated.join("; ") || "(nothing explicit)"}. ` +
+              `Assumed: ${icp.assumptions.length}.${note} ` +
               `You may now call discover_companies. Limits for this run: ` +
               `${ctx.limits.max_candidates} candidates, ${ctx.limits.max_scrapes} scrapes, ` +
               `${ctx.limits.max_leads} qualified leads.`,
           ),
-          summary: { hard_filters: icp.hard_filters, industries: icp.industries },
+          summary: {
+            hard_filters: icp.hard_filters,
+            soft_preferences: icp.soft_preferences,
+            user_stated: icp.user_stated,
+            assumptions: icp.assumptions,
+            industries: icp.industries,
+          },
         };
       }),
     { annotations: { readOnlyHint: false, openWorldHint: false } },
@@ -633,6 +656,48 @@ export function buildLeadTools(ctx: RunContext) {
     { annotations: { readOnlyHint: false, openWorldHint: false } },
   );
 
+  /* ----------------------------------------------- request_clarification -- */
+
+  const requestClarification = tool(
+    "request_clarification",
+    "Stop the run and ask the person for a better objective. Use this ONLY when the " +
+      "objective cannot be searched even after applying what you know about Koya's business " +
+      "— it contradicts that business, it is internally inconsistent, or it carries so little " +
+      "signal that any ICP you wrote would be invention rather than inference. A merely vague " +
+      "objective is not this: fill the gaps from the business context, record what you assumed, " +
+      "and proceed. Nothing is searched and nothing is spent after this call.",
+    {
+      reason: z.string().min(20).describe("Why this objective cannot be searched as given"),
+      questions: z
+        .array(z.string().min(10))
+        .min(1)
+        .max(4)
+        .describe("Specific questions whose answers would make it searchable"),
+    },
+    async (args) =>
+      withLogging(ctx, "request_clarification", "Objective cannot be searched", args, async () => {
+        const { error } = await supabaseAdmin()
+          .from("runs")
+          .update({
+            status: "needs_clarification",
+            status_reason: args.reason,
+            clarification_questions: args.questions,
+            finished_at: new Date().toISOString(),
+          })
+          .eq("id", ctx.runId);
+        if (error) throw new Error(`Could not record the questions: ${error.message}`);
+
+        return {
+          result: textResult(
+            `Run stopped and the questions recorded for the person to answer. ` +
+              `Do not search or spend anything further — this run is over.`,
+          ),
+          summary: { reason: args.reason, questions: args.questions },
+        };
+      }),
+    { annotations: { readOnlyHint: false, openWorldHint: false } },
+  );
+
   /* ------------------------------------------------------ get_run_state -- */
 
   const getRunState = tool(
@@ -782,6 +847,7 @@ export function buildLeadTools(ctx: RunContext) {
 
   return [
     setIcp,
+    requestClarification,
     discoverCompaniesTool,
     scrapeWebsites,
     saveLead,
@@ -805,6 +871,7 @@ export function buildLeadToolServer(ctx: RunContext): McpSdkServerConfigWithInst
 /** Fully-qualified names, for allowedTools and the permission gate. */
 export const LEAD_TOOL_NAMES = [
   "set_icp",
+  "request_clarification",
   "discover_companies",
   "scrape_websites",
   "save_lead",

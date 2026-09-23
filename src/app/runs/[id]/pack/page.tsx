@@ -92,10 +92,35 @@ export default async function PackPage({ params }: { params: Promise<{ id: strin
               <Field label="Industries" value={icp.industries?.join(", ")} />
               <Field label="Geography" value={icp.geography?.join(", ")} />
               <Field label="Headcount" value={icp.headcount_range} />
+              <Field label="Problem" value={icp.business_problem} />
+              <div className="sm:col-span-2">
+                <dt className="label">From the objective</dt>
+                <dd>
+                  {icp.user_stated?.length ? (
+                    <ul className="list-disc pl-5">{icp.user_stated.map((f) => <li key={f}>{f}</li>)}</ul>
+                  ) : (
+                    <p style={{ color: "var(--ink-faint)" }}>Nothing explicit — the criteria below were inferred.</p>
+                  )}
+                </dd>
+              </div>
+              {icp.assumptions?.length > 0 && (
+                <div className="sm:col-span-2">
+                  <dt className="label">Assumed by the agent</dt>
+                  <dd><ul className="list-disc pl-5" style={{ color: "var(--ink-soft)" }}>
+                    {icp.assumptions.map((f) => <li key={f}>{f}</li>)}</ul></dd>
+                </div>
+              )}
               <div className="sm:col-span-2">
                 <dt className="label">Hard filters</dt>
                 <dd><ul className="list-disc pl-5">{icp.hard_filters?.map((f) => <li key={f}>{f}</li>)}</ul></dd>
               </div>
+              {icp.soft_preferences?.length > 0 && (
+                <div className="sm:col-span-2">
+                  <dt className="label">Soft preferences</dt>
+                  <dd><ul className="list-disc pl-5" style={{ color: "var(--ink-soft)" }}>
+                    {icp.soft_preferences.map((f) => <li key={f}>{f}</li>)}</ul></dd>
+                </div>
+              )}
             </dl>
           )}
         </section>

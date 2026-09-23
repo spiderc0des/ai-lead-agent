@@ -138,6 +138,16 @@ export async function GET(request: Request, ctx: { params: Promise<{ id: string 
         `| Buyer persona | ${icp.buyer_persona} |`,
         `| Business problem | ${icp.business_problem} |`,
         ``,
+        `**From the objective**`,
+        ``,
+        ...(icp.user_stated?.length
+          ? icp.user_stated.map((f) => `- ${f}`)
+          : ["- (nothing explicit — the criteria below were inferred)"]),
+        ``,
+        `**Assumed by the agent**`,
+        ``,
+        ...(icp.assumptions?.length ? icp.assumptions.map((f) => `- ${f}`) : ["- (none)"]),
+        ``,
         `**Hard filters**`,
         ``,
         ...icp.hard_filters.map((f) => `- ${f}`),

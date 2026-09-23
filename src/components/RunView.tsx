@@ -15,6 +15,7 @@ type Run = {
   status: string; status_reason: string | null; model: string | null;
   total_cost_usd: number | null; num_turns: number | null; duration_ms: number | null;
   summary: string | null; quality_scorecard: Record<string, string> | null; created_at: string;
+  clarification_questions: string[] | null;
 };
 type Lead = {
   id: string; company_name: string; company_domain: string;
@@ -123,6 +124,16 @@ export function RunView({ runId }: { runId: string }) {
 
       {run.status_reason && <p className="panel panel-warning">{run.status_reason}</p>}
 
+      {run.clarification_questions?.length ? (
+        <div className="panel panel-info">
+          <p className="font-medium">The agent stopped to ask before spending anything.</p>
+          <ul className="mt-1.5 list-disc pl-5">
+            {run.clarification_questions.map((q) => <li key={q}>{q}</li>)}
+          </ul>
+          <p className="hint">Answer these in a new run rather than editing this one.</p>
+        </div>
+      ) : null}
+
       {/* ------------------------------------------- objective vs ICP ---- */}
       <div className="grid gap-4 md:grid-cols-2">
         <div className="card">
@@ -142,10 +153,21 @@ export function RunView({ runId }: { runId: string }) {
               <Row label="Geography" value={run.icp.geography?.join(", ")} />
               <Row label="Headcount" value={run.icp.headcount_range} />
               <Row label="Persona" value={run.icp.buyer_persona} />
-              <div>
-                <dt className="label mb-0.5">Hard filters</dt>
-                <dd><ul className="list-disc pl-5">{run.icp.hard_filters?.map((f) => <li key={f}>{f}</li>)}</ul></dd>
-              </div>
+              <Row label="Problem" value={run.icp.business_problem} />
+
+              {/* Provenance first: which of these the person actually asked
+                  for, and which the agent supplied. Without the split an
+                  inferred constraint is indistinguishable from a requested
+                  one. */}
+              <IcpList
+                label="From your objective"
+                items={run.icp.user_stated}
+                empty="Nothing explicit — everything below was inferred."
+              />
+              <IcpList label="Assumed by the agent" items={run.icp.assumptions} muted />
+              <IcpList label="Hard filters" items={run.icp.hard_filters} />
+              <IcpList label="Soft preferences" items={run.icp.soft_preferences} muted />
+              <IcpList label="Disqualifiers" items={run.icp.disqualifiers} muted />
             </dl>
           )}
         </div>
@@ -251,6 +273,34 @@ export function RunView({ runId }: { runId: string }) {
           </dl>
         </Collapsible>
       )}
+    </div>
+  );
+}
+
+function IcpList({
+  label,
+  items,
+  muted,
+  empty,
+}: {
+  label: string;
+  items?: string[] | null;
+  muted?: boolean;
+  empty?: string;
+}) {
+  if (!items?.length && !empty) return null;
+  return (
+    <div>
+      <dt className="label mb-0.5">{label}</dt>
+      <dd>
+        {items?.length ? (
+          <ul className="list-disc pl-5" style={muted ? { color: "var(--ink-soft)" } : undefined}>
+            {items.map((f) => <li key={f}>{f}</li>)}
+          </ul>
+        ) : (
+          <p style={{ color: "var(--ink-faint)" }}>{empty}</p>
+        )}
+      </dd>
     </div>
   );
 }

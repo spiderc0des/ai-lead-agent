@@ -30,9 +30,10 @@ cp .env.example .env.local     # then fill it in
 Create a project, then run the three migrations in order in the SQL editor:
 
 ```
-supabase/migrations/0001_init.sql       domain tables
-supabase/migrations/0002_auth_rls.sql   profiles, admin role, RLS, realtime
-supabase/migrations/0003_budget.sql     shared spend ledger
+supabase/migrations/0001_init.sql          domain tables
+supabase/migrations/0002_auth_rls.sql      profiles, admin role, RLS, realtime
+supabase/migrations/0003_budget.sql        shared spend ledger
+supabase/migrations/0004_clarification.sql lets a run stop and ask
 ```
 
 Put the project URL and both keys in `.env.local`. Two things that bite:
