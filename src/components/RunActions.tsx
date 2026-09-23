@@ -18,6 +18,7 @@ export function RunActions({
   logOpen,
   onToggleLog,
   logCount,
+  resume,
 }: {
   runId: string;
   objective: string;
@@ -26,19 +27,28 @@ export function RunActions({
   logOpen: boolean;
   onToggleLog: () => void;
   logCount: number;
+  /** Present when the run was interrupted and has budget and turns left. */
+  resume?: { budgetLeft: number; turnsLeft: number; found: string };
 }) {
   const router = useRouter();
-  const [busy, setBusy] = useState<"cancel" | "delete" | null>(null);
+  const [busy, setBusy] = useState<"cancel" | "delete" | "resume" | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const shortObjective = objective.length > 60 ? `${objective.slice(0, 60)}…` : objective;
 
-  async function act(kind: "cancel" | "delete") {
+  async function act(kind: "cancel" | "delete" | "resume") {
     setBusy(kind);
     setError(null);
-    const res = await fetch(kind === "cancel" ? `/api/runs/${runId}/cancel` : `/api/runs/${runId}`, {
-      method: kind === "cancel" ? "POST" : "DELETE",
-    });
+    const res =
+      kind === "resume"
+        ? await fetch(`/api/runs/${runId}/continue`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ resume: true }),
+          })
+        : await fetch(kind === "cancel" ? `/api/runs/${runId}/cancel` : `/api/runs/${runId}`, {
+            method: kind === "cancel" ? "POST" : "DELETE",
+          });
     const body = await res.json().catch(() => ({}));
     setBusy(null);
 
@@ -62,6 +72,18 @@ export function RunActions({
           Log
           {logCount > 0 && <span style={{ opacity: 0.7 }}>{logCount}</span>}
         </button>
+
+        {resume && (
+          <ConfirmButton
+            label="Resume run"
+            confirmLabel="Resume"
+            question="Pick this run back up where it stopped?"
+            detail={`It keeps what it already found (${resume.found}) and continues with up to $${resume.budgetLeft.toFixed(2)} and ${resume.turnsLeft} turns left.`}
+            busy={busy === "resume"}
+            busyLabel="Resuming…"
+            onConfirm={() => act("resume")}
+          />
+        )}
 
         {live && (
           <ConfirmButton

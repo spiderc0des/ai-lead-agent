@@ -139,6 +139,19 @@ export function RunView({ runId }: { runId: string }) {
         logOpen={logOpen}
         onToggleLog={() => setLogOpen((o) => !o)}
         logCount={events.length}
+        resume={
+          // Interrupted runs with room left can be picked back up. The server
+          // re-checks all of this; the button only avoids offering a dead end.
+          (run.status === "failed" || run.status === "cancelled") &&
+          run.limits.max_budget_usd - Number(run.total_cost_usd ?? 0) >= 0.1 &&
+          run.limits.max_turns - (run.num_turns ?? 0) >= 5
+            ? {
+                budgetLeft: run.limits.max_budget_usd - Number(run.total_cost_usd ?? 0),
+                turnsLeft: run.limits.max_turns - (run.num_turns ?? 0),
+                found: `${candidateCount} candidates, ${sources.length} pages, ${leads.length} leads`,
+              }
+            : undefined
+        }
       />
 
       {logOpen && <RunLog objective={run.objective} events={events} />}

@@ -93,6 +93,15 @@ function describe(
     case "started":
       return { title: "Agent began work", tone: muted, body: null };
     case "resumed":
+      // With an actor, a person picked an interrupted run back up; without
+      // one, it is the agent starting its next session.
+      if (who !== "the agent") {
+        return {
+          title: `Resumed by ${who}`,
+          tone: accent,
+          body: d.from ? <p className="hint">Picked up after the run {String(d.from)}.</p> : null,
+        };
+      }
       return {
         title: "Agent resumed",
         tone: muted,

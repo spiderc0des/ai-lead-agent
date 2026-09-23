@@ -75,12 +75,14 @@ export function buildPrompt(
   objective: string,
   opts: {
     icpAlreadyApproved?: boolean;
+    /** A session picking up a run that was cut off with its ICP already written. */
+    resumingInterruptedWork?: boolean;
     answers?: { question: string; answer: string }[];
     /** The wording the person first gave, when their answers have replaced it. */
     originalObjective?: string;
   } = {},
 ): string {
-  const { icpAlreadyApproved = false, answers = [], originalObjective } = opts;
+  const { icpAlreadyApproved = false, resumingInterruptedWork = false, answers = [], originalObjective } = opts;
 
   const header = `Qualification objective:
 
@@ -100,6 +102,17 @@ ${answers.map((a) => `- ${a.question}\n  -> ${a.answer}`).join("\n")}
 
 Everything the person states here is a user_stated constraint.`
     : "";
+
+  if (resumingInterruptedWork) {
+    // The earlier session was cut off — a restart, a cancel, a time limit.
+    // Its work is all in the database; redoing it would spend the budget
+    // twice and could replace an ICP the evidence was gathered against.
+    return `${header}${replies}
+
+This run is RESUMING after being interrupted. An earlier session already recorded the ICP and may have discovered candidates, scraped pages, and saved leads — all of it is stored against the run and still counts toward its limits.
+
+Do NOT call set_icp; keep the recorded criteria. Call get_run_state first to see the ICP and what already exists. Qualify from pages already scraped before scraping more, work through unevaluated candidates before discovering new ones, and only search again if the existing pool genuinely runs out. Then continue through drafting until you have called finalize_run.`;
+  }
 
   if (icpAlreadyApproved) {
     // Resumed after approval. Refining again would be busywork at best and

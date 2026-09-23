@@ -95,6 +95,10 @@ export async function runAgent(runId: string): Promise<TerminalStatus> {
   );
 
   const icpAlreadyApproved = Boolean(seeded.icp && seeded.icp_approved_at);
+  // An ICP exists, turns have been used, and nobody approved it: an earlier
+  // session wrote it and was then cut off.
+  const resumingInterruptedWork =
+    Boolean(seeded.icp) && !icpAlreadyApproved && Number(seeded.num_turns ?? 0) > 0;
   const isResume = (seeded.num_turns ?? 0) > 0 || answers.length > 0 || icpAlreadyApproved;
 
   // Cumulative across sessions. This session's own spend is measured from
@@ -183,6 +187,7 @@ export async function runAgent(runId: string): Promise<TerminalStatus> {
     const stream = query({
       prompt: buildPrompt(composeObjective(ctx.objective, answers), {
         icpAlreadyApproved,
+        resumingInterruptedWork,
         answers,
         originalObjective: ctx.objective,
       }),

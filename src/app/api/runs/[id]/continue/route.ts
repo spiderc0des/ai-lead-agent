@@ -15,10 +15,18 @@ const Body = z.object({
   answers: z.array(z.string()).optional(),
   /** Approve the recorded ICP and go on to discovery. */
   approve: z.boolean().optional(),
+  /** Pick an interrupted (failed or cancelled) run back up where it stopped. */
+  resume: z.boolean().optional(),
 });
 
-/** Below this the run could not do anything useful with a new session. */
+/** Stopped without finishing — so there is work left to pick up. */
+const INTERRUPTED = ["failed", "cancelled"];
+/** Waiting on a person. */
+const WAITING = ["needs_clarification", "awaiting_confirmation"];
+
+/** Below these the run could not do anything useful with a new session. */
 const MIN_SESSION_BUDGET_USD = 0.1;
+const MIN_SESSION_TURNS = 5;
 
 /**
  * Resume a run that stopped waiting on a person — the same run, not a new one.
@@ -40,7 +48,7 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
     const db = supabaseAdmin();
     const { data: run } = await db
       .from("runs")
-      .select("id, user_id, status, limits, total_cost_usd, clarification_questions")
+      .select("id, user_id, status, limits, total_cost_usd, num_turns, clarification_questions")
       .eq("id", id)
       .maybeSingle();
 
@@ -48,9 +56,12 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
     if (run.user_id !== user.id && user.role !== "admin") {
       return NextResponse.json({ error: "Not your run" }, { status: 403 });
     }
-    if (run.status !== "needs_clarification" && run.status !== "awaiting_confirmation") {
+    const interrupted = INTERRUPTED.includes(run.status);
+    if (!interrupted && !WAITING.includes(run.status)) {
+      // completed / needs_review ran to finalize_run: there is nothing left to
+      // pick up, only a result to review.
       return NextResponse.json(
-        { error: `This run is ${String(run.status).replace(/_/g, " ")} — nothing is waiting on you.` },
+        { error: `This run is ${String(run.status).replace(/_/g, " ")} — it finished, so there is nothing to continue.` },
         { status: 409 },
       );
     }
@@ -66,7 +77,11 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
 
     // Validate the reply before touching money.
     let answeredPairs: { question: string; answer: string }[] = [];
-    if (run.status === "awaiting_confirmation") {
+    if (interrupted) {
+      if (!parsed.data.resume) {
+        return NextResponse.json({ error: "Confirm the resume to continue." }, { status: 400 });
+      }
+    } else if (run.status === "awaiting_confirmation") {
       if (!parsed.data.approve) {
         return NextResponse.json({ error: "Approve the criteria to continue." }, { status: 400 });
       }
@@ -89,6 +104,13 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
     const limits = RunLimitsSchema.parse(run.limits);
     const spent = Number(run.total_cost_usd ?? 0);
     const remaining = Number((limits.max_budget_usd - spent).toFixed(6));
+    const turnsLeft = limits.max_turns - Number(run.num_turns ?? 0);
+    if (turnsLeft < MIN_SESSION_TURNS) {
+      return NextResponse.json(
+        { error: `This run has used ${run.num_turns} of its ${limits.max_turns} turns — too few are left to continue.` },
+        { status: 409 },
+      );
+    }
     if (remaining < MIN_SESSION_BUDGET_USD) {
       return NextResponse.json(
         { error: `This run has used $${spent.toFixed(2)} of its $${limits.max_budget_usd.toFixed(2)} budget — too little is left to continue.` },
@@ -130,7 +152,9 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
     }
 
     const actor = { id: user.id, email: user.email };
-    if (run.status === "awaiting_confirmation") {
+    if (interrupted) {
+      await recordRunEvent(id, run.user_id, "resumed", actor, { from: run.status, spent_so_far_usd: spent });
+    } else if (run.status === "awaiting_confirmation") {
       await recordRunEvent(id, run.user_id, "approved", actor, {});
     } else {
       await recordRunEvent(id, run.user_id, "answered", actor, { answers: answeredPairs });
