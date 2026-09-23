@@ -141,7 +141,7 @@ export async function sweepOrphanedRuns(): Promise<number> {
 
   const { data: stale } = await supabaseAdmin()
     .from("runs")
-    .select("id, user_id, limits, heartbeat_at, started_at, total_cost_usd, reserved_usd, session_baseline_usd")
+    .select("id, user_id, limits, heartbeat_at, started_at, created_at, total_cost_usd, reserved_usd, session_baseline_usd")
     .eq("status", "running");
 
   if (!stale?.length) return 0;
@@ -149,8 +149,12 @@ export async function sweepOrphanedRuns(): Promise<number> {
   let reclaimed = 0;
   for (const run of stale) {
     if (isRunning(run.id)) continue;
-    const last = run.heartbeat_at ?? run.started_at;
-    if (last && last > cutoff) continue;
+    // Fall back to created_at: a run with neither a heartbeat nor a start
+    // time otherwise reads as infinitely stale and was reclaimed the instant
+    // the sweep saw it — which, once the sweep ran every minute, included a
+    // run the tool tests had inserted seconds earlier.
+    const last = run.heartbeat_at ?? run.started_at ?? run.created_at;
+    if (last > cutoff) continue;
 
     const { data: updated } = await supabaseAdmin()
       .from("runs")

@@ -198,3 +198,103 @@ export async function discoverCompanies(
     datasetId: run.defaultDatasetId,
   };
 }
+
+/* ------------------------------------------------------------------------
+ * Streaming discovery
+ *
+ * The blocking form above waits for the whole actor run, then returns every
+ * result at once — and a discovery call is the single longest wait in a run,
+ * 90 to 360 seconds across a run's calls. This form starts the run, polls its
+ * dataset while it works, and hands each new page of results to the caller as
+ * it lands, so the caller can start on those candidates (fetching their
+ * homepages) while later queries are still being searched.
+ * ---------------------------------------------------------------------- */
+
+const TERMINAL_RUN_STATUSES = new Set(["SUCCEEDED", "FAILED", "ABORTED", "TIMED-OUT"]);
+const POLL_INTERVAL_MS = 2_500;
+const STREAM_DEADLINE_MS = 180_000;
+
+function parsePages(items: Record<string, unknown>[]): DiscoveryResult[] {
+  const results: DiscoveryResult[] = [];
+  for (const page of items) {
+    const query = String(page.searchQuery ?? "");
+    for (const r of (page.organicResults ?? []) as Record<string, unknown>[]) {
+      const url = typeof r.url === "string" ? r.url : null;
+      if (!url) continue;
+      results.push({
+        title: typeof r.title === "string" ? r.title : null,
+        url,
+        description: typeof r.description === "string" ? r.description : null,
+        query,
+      });
+    }
+  }
+  return results;
+}
+
+export type StreamReport = Omit<DiscoveryRunReport, "results"> & { resultCount: number };
+
+export async function discoverCompaniesStreaming(
+  queries: string[],
+  maxPages: number,
+  onResults: (batch: DiscoveryResult[]) => Promise<void>,
+): Promise<StreamReport> {
+  if (queries.length === 0) throw new Error("No queries supplied");
+  if (maxPages < 1) throw new Error("maxPages must be at least 1");
+
+  const api = client();
+  const pagesPerQuery = Math.max(1, Math.floor(maxPages / queries.length));
+  const pagesRequested = pagesPerQuery * queries.length;
+
+  const started = await api.actor(actorId()).start(buildActorInput(queries, pagesPerQuery), {
+    memory: 1024,
+    // The pay-per-event cap (maxItems is the pay-per-result lever and is
+    // ignored here). Apify floors it at $0.50; real spend is far below.
+    maxTotalChargeUsd: APIFY_MIN_RUN_CHARGE_USD,
+    timeout: Math.ceil(STREAM_DEADLINE_MS / 1000) - 10,
+  });
+
+  const datasetId = started.defaultDatasetId;
+  const deadline = Date.now() + STREAM_DEADLINE_MS;
+  let offset = 0;
+  let resultCount = 0;
+  let status: string = started.status;
+  let usage: number | null = null;
+
+  const drain = async () => {
+    const { items } = await api.dataset(datasetId).listItems({ offset, limit: 100 });
+    if (!items.length) return;
+    offset += items.length;
+    const batch = parsePages(items as Record<string, unknown>[]);
+    resultCount += batch.length;
+    if (batch.length) await onResults(batch);
+  };
+
+  for (;;) {
+    const run = await api.run(started.id).get();
+    status = run?.status ?? status;
+    usage = run?.usageTotalUsd ?? usage;
+    await drain();
+    if (TERMINAL_RUN_STATUSES.has(status)) break;
+    if (Date.now() > deadline) {
+      // Never leave an actor running: abort it, keep what arrived.
+      await api.run(started.id).abort().catch(() => undefined);
+      status = "ABORTED";
+      break;
+    }
+    await new Promise((r) => setTimeout(r, POLL_INTERVAL_MS));
+  }
+
+  // Items written between the last poll and the terminal status.
+  await drain();
+  const final = await api.run(started.id).get().catch(() => undefined);
+
+  return {
+    resultCount,
+    pagesRequested,
+    actualCostUsd: final?.usageTotalUsd ?? usage,
+    runId: started.id,
+    runStatus: status,
+    datasetId,
+  };
+}

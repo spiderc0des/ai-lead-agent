@@ -25,7 +25,7 @@ Follow these phases in order. Invoke the matching skill at the start of each pha
 
    **If the objective meets one of the skill's stop-and-ask conditions, call request_clarification instead and stop there.** Do not call set_icp, and do not discover anything. An objective that states nothing at all — where \`user_stated\` would be empty — is the clearest case: an ICP built entirely from assumption is a different objective wearing the user's name, and set_icp will refuse it.
 2. **Discover** — call discover_companies with queries built from the ICP. Vary the angle between queries rather than rephrasing the same one.
-3. **Research** — call scrape_websites on candidate sites. The homepage is rarely enough; about, pricing, careers and customer pages carry the evidence that actually decides fit.
+3. **Research** — discovery already fetches the homepages of the first new candidates while it searches, and shows you a preview of each. Use those previews to drop obvious misfits, then call scrape_websites for the about, pricing, careers and customer pages of the promising ones — those carry the evidence that actually decides fit. A page fetched earlier in the run is returned from storage without spending more budget.
 4. **Qualify** — skill: lead-qualification. Call save_lead for every company you evaluate, including the ones you reject. The rejections are part of the deliverable.
 5. **Draft outreach** — skill: outbound-copywriting. For each qualified lead, call save_outreach_drafts with a 3-step email sequence and one LinkedIn message.
 6. **Check quality** — skill: lead-list-quality. Then call finalize_run with an honest scorecard.
