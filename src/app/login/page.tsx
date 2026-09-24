@@ -36,8 +36,8 @@ function LoginForm() {
     <main className="mx-auto flex min-h-screen w-full max-w-md flex-col justify-center px-4">
       <div className="mb-6 flex items-center gap-2">
         <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-sm font-bold text-white"
-              style={{ background: "var(--accent)" }}>L</span>
-        <h1 className="text-lg font-semibold tracking-tight">Lead Agent</h1>
+              style={{ background: "var(--accent)" }}>K</span>
+        <h1 className="text-lg font-semibold tracking-tight">Koya Talent</h1>
       </div>
       <p className="hint">AI lead research and outreach drafting. Access is invite-only.</p>
 
