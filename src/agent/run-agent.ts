@@ -33,12 +33,13 @@ export function agentCwd(): string {
 const inFlight = new Map<string, AbortController>();
 
 /** Runs a person cancelled, as opposed to ones stopped by the wall clock. */
-const cancelledByPerson = new Set<string>();
+/** Runs a person stopped, with who did it — for the status reason and the email. */
+const cancelledByPerson = new Map<string, string>();
 
-export function cancelRun(runId: string): boolean {
+export function cancelRun(runId: string, byName = "a person"): boolean {
   const controller = inFlight.get(runId);
   if (!controller) return false;
-  cancelledByPerson.add(runId);
+  cancelledByPerson.set(runId, byName);
   controller.abort();
   return true;
 }
@@ -296,6 +297,7 @@ export async function runAgent(runId: string): Promise<TerminalStatus> {
     .single();
 
   const settledByTool = ["completed", "needs_review", "needs_clarification", "awaiting_confirmation"];
+  const cancelledBy = cancelledByPerson.get(runId);
   const personCancelled = cancelledByPerson.delete(runId);
 
   if (finalRow?.status && settledByTool.includes(finalRow.status)) {
@@ -307,6 +309,8 @@ export async function runAgent(runId: string): Promise<TerminalStatus> {
     terminal = controller.signal.aborted && !statusReason?.startsWith("Run failed") ? "cancelled" : "failed";
     if (terminal === "cancelled" && !personCancelled) {
       statusReason = `Stopped at the ${Math.round(ctx.limits.wall_clock_ms / 60000)}-minute time limit. Partial results are still stored.`;
+    } else if (terminal === "cancelled") {
+      statusReason = `Cancelled by ${cancelledBy}. Partial results are still stored.`;
     }
     await supabaseAdmin()
       .from("runs")
@@ -339,19 +343,19 @@ export async function runAgent(runId: string): Promise<TerminalStatus> {
  * Never allowed to affect the run's outcome: the run has already finished and
  * been recorded by the time this is called, and every failure is swallowed.
  */
-async function notifyOwner(runId: string, terminal: TerminalStatus): Promise<void> {
+export async function notifyOwner(runId: string, terminal: TerminalStatus): Promise<void> {
   try {
     const db = supabaseAdmin();
     const { data: run } = await db
       .from("runs")
-      .select("id, user_id, objective, status, status_reason, limits, total_cost_usd, duration_ms")
+      .select("id, user_id, objective, status, status_reason, limits, total_cost_usd, duration_ms, icp, clarification_questions")
       .eq("id", runId)
       .single();
     if (!run) return;
 
     const { data: profile } = await db
       .from("profiles")
-      .select("email")
+      .select("*")
       .eq("id", run.user_id)
       .maybeSingle();
     if (!profile?.email) return;
@@ -373,6 +377,10 @@ async function notifyOwner(runId: string, terminal: TerminalStatus): Promise<voi
       status: run.status ?? terminal,
       statusReason: run.status_reason ?? null,
       qualified: await countOf("leads", ["qualification_status", "qualified"]),
+      needsReview: await countOf("leads", ["qualification_status", "needs_review"]),
+      recipientName: profile.full_name ?? null,
+      icp: run.icp ?? null,
+      questions: (run.clarification_questions as string[] | null) ?? [],
       targetLeads: (run.limits as { max_leads?: number })?.max_leads ?? 0,
       evaluated: await countOf("leads"),
       costUsd: Number(run.total_cost_usd ?? 0),

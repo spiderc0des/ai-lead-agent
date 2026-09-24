@@ -6,6 +6,8 @@ export type Profile = {
   id: string;
   email: string;
   role: "member" | "admin";
+  /** Null for accounts created before 0008_names_roles.sql, or without a name. */
+  full_name: string | null;
 };
 
 export class AuthError extends Error {
@@ -30,14 +32,17 @@ export async function currentProfile(): Promise<Profile | null> {
   // on_auth_user_created trigger, and we want a clear error either way.
   const { data } = await supabaseAdmin()
     .from("profiles")
-    .select("id, email, role")
+    // "*" rather than a column list: full_name only exists once
+    // 0008_names_roles.sql is applied, and naming a missing column would fail
+    // the whole read — locking every admin out of /admin.
+    .select("*")
     .eq("id", user.id)
     .maybeSingle();
 
   if (!data) {
-    return { id: user.id, email: user.email ?? "", role: "member" };
+    return { id: user.id, email: user.email ?? "", role: "member", full_name: null };
   }
-  return data as Profile;
+  return { full_name: null, ...data } as Profile;
 }
 
 /** Throws 401 unless someone is signed in. */

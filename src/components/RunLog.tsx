@@ -6,6 +6,8 @@ export type RunEvent = {
   id: number;
   kind: string;
   actor_email: string | null;
+  /** The person's name at the time. Absent before 0008_names_roles.sql. */
+  actor_name?: string | null;
   detail: Record<string, unknown>;
   created_at: string;
 };
@@ -42,7 +44,7 @@ export function RunLog({ objective, events }: { objective: string; events: RunEv
 }
 
 function LogEntry({ event: e }: { event: RunEvent }) {
-  const who = e.actor_email ?? "the agent";
+  const who = e.actor_name?.trim() || e.actor_email || "the agent";
   const d = e.detail ?? {};
   const questions = (d.questions as string[] | undefined) ?? [];
   const answers = (d.answers as QA[] | undefined) ?? [];

@@ -1,6 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { type EmailOtpType } from "@supabase/supabase-js";
 import { supabaseServer } from "@/lib/supabase/server";
+import { publicUrl } from "@/lib/public-origin";
 
 /**
  * Magic-link and invite landing.
@@ -24,14 +25,17 @@ import { supabaseServer } from "@/lib/supabase/server";
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const next = searchParams.get("next") ?? "/";
-  const safeNext = next.startsWith("/") ? next : "/";
+  // App-relative only. "//evil.com" and "/\\evil.com" also start with "/" but
+  // a browser treats them as another host, which would make this an open
+  // redirect straight after sign-in.
+  const safeNext = next.startsWith("/") && !next.startsWith("//") && !next.startsWith("/\\") ? next : "/";
 
   // Supabase reports its own failures in the query string.
   const supabaseError =
     searchParams.get("error_description") ?? searchParams.get("error");
   if (supabaseError) {
     return NextResponse.redirect(
-      new URL(`/login?error=${encodeURIComponent(supabaseError)}`, request.url),
+      publicUrl(`/login?error=${encodeURIComponent(supabaseError)}`, request),
     );
   }
 
@@ -42,10 +46,10 @@ export async function GET(request: NextRequest) {
     const { error } = await supabase.auth.exchangeCodeForSession(code);
     if (error) {
       return NextResponse.redirect(
-        new URL(`/login?error=${encodeURIComponent(error.message)}`, request.url),
+        publicUrl(`/login?error=${encodeURIComponent(error.message)}`, request),
       );
     }
-    return NextResponse.redirect(new URL(safeNext, request.url));
+    return NextResponse.redirect(publicUrl(safeNext, request));
   }
 
   const token_hash = searchParams.get("token_hash");
@@ -54,16 +58,16 @@ export async function GET(request: NextRequest) {
     const { error } = await supabase.auth.verifyOtp({ type, token_hash });
     if (error) {
       return NextResponse.redirect(
-        new URL(`/login?error=${encodeURIComponent(error.message)}`, request.url),
+        publicUrl(`/login?error=${encodeURIComponent(error.message)}`, request),
       );
     }
-    return NextResponse.redirect(new URL(safeNext, request.url));
+    return NextResponse.redirect(publicUrl(safeNext, request));
   }
 
   // Nothing usable in the URL. Most often the email template still points at
   // the implicit flow, which puts the session in the URL fragment where a
   // server route cannot see it.
   return NextResponse.redirect(
-    new URL("/login?error=link_missing_token", request.url),
+    publicUrl("/login?error=link_missing_token", request),
   );
 }

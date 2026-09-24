@@ -13,7 +13,7 @@
 import "./env";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { buildLeadTools } from "@/agent/tools";
-import type { RunContext } from "@/agent/budget";
+import { type RunContext, reserveBudget, settleBudget, releaseDanglingApify } from "@/agent/budget";
 import { DEFAULT_LIMITS } from "@/lib/schemas";
 
 let passed = 0, failed = 0, skipped = 0;
@@ -412,6 +412,22 @@ async function main() {
       const reason = after?.status_reason ?? "";
       check("  with a specific reason recorded", /Server verification found: .+\S/.test(reason), reason);
       check("  naming the offending company or count", /second\.example|only \d+ of \d+/.test(reason), reason);
+    }
+
+    /* ------------------------------------- dangling reservations ------- */
+    console.log("\n== a dead process cannot strand Apify budget ==");
+    {
+      const reservedNow = async () =>
+        Number((await db.from("app_budget").select("apify_reserved_usd").single()).data?.apify_reserved_usd ?? 0);
+      const before = await reservedNow();
+      // One discovery call that finished, and one the process died during.
+      await reserveBudget("apify", 0.01, run.id, anyUser.id, "test: finished call");
+      await settleBudget("apify", 0.01, 0, run.id, anyUser.id, "test: finished call");
+      await reserveBudget("apify", 0.02, run.id, anyUser.id, "test: call in flight at crash");
+      const released = await releaseDanglingApify(run.id, anyUser.id);
+      check("releases only the reservation that was never settled", Math.abs(released - 0.02) < 1e-9, released);
+      check("  the shared pool is back where it started", Math.abs((await reservedNow()) - before) < 1e-9);
+      check("  a second pass releases nothing", (await releaseDanglingApify(run.id, anyUser.id)) === 0);
     }
 
     /* ------------------------------------------------ audit trail ------- */

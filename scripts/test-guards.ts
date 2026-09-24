@@ -16,6 +16,7 @@ import { CreateRunSchema, RunLimitsSchema, DEFAULT_LIMITS } from "@/lib/schemas"
 import { composeObjective, answersFromEvents, leadCountFromObjective } from "@/lib/objective";
 import { deriveMaxTurns } from "@/lib/schemas";
 import { draftFormatProblems } from "@/lib/draft-format";
+import { publicOrigin } from "@/lib/public-origin";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 
@@ -171,6 +172,24 @@ console.log("\n== outreach draft format ==");
   check("email 1 without Koya is rejected", noKoya.some((p) => /name Koya/.test(p)), noKoya);
   const unsigned = draftFormatProblems({ emails: [good(1), mk(2, "Hi [Name],\n\nFollowing up."), good(3)], linkedin_message: "Hello there" });
   check("an unsigned email and a nameless LinkedIn note are both rejected", unsigned.length === 2, unsigned);
+}
+
+
+console.log("\n== redirects use the public address, not the container's ==");
+{
+  const saved = process.env.NEXT_PUBLIC_APP_URL;
+  const behindProxy = new Request("http://localhost:8080/auth/confirm?code=x", {
+    headers: { host: "localhost:8080", "x-forwarded-host": "koya-lead-agent.up.railway.app", "x-forwarded-proto": "https" },
+  });
+  process.env.NEXT_PUBLIC_APP_URL = "https://koya-lead-agent.up.railway.app/";
+  check("configured app URL wins over the internal request URL", publicOrigin(behindProxy) === "https://koya-lead-agent.up.railway.app", publicOrigin(behindProxy));
+  delete process.env.NEXT_PUBLIC_APP_URL;
+  check("falls back to the forwarded host behind a proxy", publicOrigin(behindProxy) === "https://koya-lead-agent.up.railway.app", publicOrigin(behindProxy));
+  const local = new Request("http://localhost:3000/auth/confirm", { headers: { host: "localhost:3000" } });
+  check("local development stays on http://localhost", publicOrigin(local) === "http://localhost:3000", publicOrigin(local));
+  process.env.NEXT_PUBLIC_APP_URL = "localhost";
+  check("a scheme-less configured value is ignored rather than trusted", publicOrigin(local) === "http://localhost:3000", publicOrigin(local));
+  if (saved === undefined) delete process.env.NEXT_PUBLIC_APP_URL; else process.env.NEXT_PUBLIC_APP_URL = saved;
 }
 
 console.log("\n== objective shape guard ==");

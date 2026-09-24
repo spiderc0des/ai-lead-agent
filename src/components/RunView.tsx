@@ -61,7 +61,7 @@ export function RunView({ runId }: { runId: string }) {
       supabase.from("page_sources").select("*").eq("run_id", runId).order("scraped_at"),
       supabase.from("outreach_drafts").select("*").eq("run_id", runId),
       supabase.from("candidates").select("id", { count: "exact", head: true }).eq("run_id", runId),
-      supabase.from("run_events").select("id, kind, actor_email, detail, created_at").eq("run_id", runId).order("created_at"),
+      supabase.from("run_events").select("*").eq("run_id", runId).order("created_at"),
     ]);
     const nextRun = (r.data as Run) ?? null;
     statusRef.current = nextRun?.status ?? null;

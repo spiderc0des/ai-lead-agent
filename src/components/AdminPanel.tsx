@@ -22,7 +22,6 @@ const PER_USER_CEILING = 5;
 
 export function AdminPanel({ budget, runningNow }: { budget: Budget; runningNow: number }) {
   const router = useRouter();
-  const [email, setEmail] = useState("");
   const [note, setNote] = useState<string | null>(null);
   const [apifyCap, setApifyCap] = useState(budget.apify_cap_usd);
   const [agentCap, setAgentCap] = useState(budget.agent_cap_usd);
@@ -184,29 +183,6 @@ export function AdminPanel({ budget, runningNow }: { budget: Budget; runningNow:
         </p>
       </section>
 
-      <section className="card">
-        <h2 className="text-sm font-semibold">Invite a user</h2>
-        <p className="hint">
-          Signup is closed. An address only gets a sign-in link once it has an account, and this is
-          the only way to create one.
-        </p>
-        <div className="mt-3 flex flex-wrap items-center gap-2">
-          <input
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            placeholder="teammate@company.com"
-            className="field w-64"
-          />
-          <button
-            disabled={busy || !email.includes("@")}
-            onClick={() => post("/api/admin/invite", { email })}
-            className="btn btn-primary btn-sm"
-          >
-            Send invite
-          </button>
-        </div>
-      </section>
 
       {note && (
         <p className="panel panel-info">{note}</p>

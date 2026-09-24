@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light">
+<title>You're invited to Koya Lead Agent</title>
+</head>
+<body style="margin:0;padding:24px;background:#faf9f5;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#141413;">
+<div style="display:none;max-height:0;overflow:hidden;opacity:0;color:transparent;">You've been invited to Koya Lead Agent. Accept to sign in.</div>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td align="center">
+<table role="presentation" width="100%" style="max-width:560px;background:#ffffff;border:1px solid #e4e1d9;border-radius:10px;" cellpadding="0" cellspacing="0">
+<tr><td style="padding:24px 28px;">
+<p style="margin:0 0 4px;font-size:12px;letter-spacing:.04em;text-transform:uppercase;color:#8a8578;">Koya Lead Agent</p>
+<h1 style="margin:0 0 16px;font-size:19px;line-height:1.3;">You're invited to Koya Lead Agent</h1>
+<p style="margin:0 0 14px;font-size:14px;line-height:1.6;color:#57534a;">Hi {{ .Data.full_name }},</p>
+<p style="margin:0 0 14px;font-size:14px;line-height:1.6;color:#141413;">You've been given access to <b>Koya Lead Agent</b>, Koya Talent's lead research tool. Describe the companies you want to reach and it finds them, checks their websites, qualifies each one with evidence, and drafts outreach for you to review.</p><p style="margin:0 0 14px;font-size:14px;line-height:1.6;color:#141413;">Your account is ready. It switches on the first time you use the button below. There's no password: after this, you sign in with a link sent to this address.</p>
+<table role="presentation" cellpadding="0" cellspacing="0" style="margin:22px 0 0;"><tr>
+<td bgcolor="#2f5d8a" style="background:#2f5d8a;border-radius:8px;">
+<a href="{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&amp;type=invite" style="display:inline-block;padding:10px 18px;color:#ffffff;text-decoration:none;font-size:14px;font-weight:600;">Accept invitation</a>
+</td></tr></table>
+<p style="margin:18px 0 0;font-size:12px;line-height:1.5;color:#8a8578;word-break:break-all;">Or paste this into your browser:<br><span style="color:#57534a;">{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&amp;type=invite</span></p>
+<p style="margin:18px 0 0;font-size:13px;line-height:1.6;color:#8a8578;">This link works once and expires. If it has expired, ask your admin to invite you again. If you weren't expecting this, you can ignore it.</p>
+</td></tr></table>
+<p style="margin:16px 0 0;font-size:12px;color:#8a8578;">Koya Talent · Koya Lead Agent</p>
+</td></tr></table>
+</body>
+</html>

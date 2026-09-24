@@ -26,20 +26,33 @@ export default async function ProfilePage() {
         <section className="card mt-5">
           <dl className="space-y-3 text-sm">
             <div className="flex flex-wrap gap-2">
+              <dt className="w-32 shrink-0" style={{ color: "var(--ink-faint)" }}>Name</dt>
+              <dd className="font-medium">
+                {profile.full_name || <span style={{ color: "var(--ink-faint)" }}>Not set — an admin can add it</span>}
+              </dd>
+            </div>
+            <div className="flex flex-wrap gap-2">
               <dt className="w-32 shrink-0" style={{ color: "var(--ink-faint)" }}>Email</dt>
               <dd className="font-medium">{profile.email}</dd>
             </div>
             <div className="flex flex-wrap gap-2">
               <dt className="w-32 shrink-0" style={{ color: "var(--ink-faint)" }}>Role</dt>
               <dd>
-                <span className={profile.role === "admin" ? "badge badge-accent" : "badge"}>{profile.role}</span>
+                <span className={profile.role === "admin" ? "badge badge-accent" : "badge"}>
+                  {profile.role === "admin" ? "Admin" : "Member"}
+                </span>
+                <span className="hint ml-2">
+                  {profile.role === "admin"
+                    ? "You can see every user's runs and manage budgets, workers and users."
+                    : "You can see and manage your own runs."}
+                </span>
               </dd>
             </div>
             <div className="flex flex-wrap gap-2">
               <dt className="w-32 shrink-0" style={{ color: "var(--ink-faint)" }}>Notifications</dt>
               <dd>
                 {emailEnabled
-                  ? "On — you get an email when a run finishes."
+                  ? "On — you get an email when your criteria are ready to review, when a run needs an answer, and when it finishes."
                   : "Off — no mail credentials are configured on this deployment."}
               </dd>
             </div>

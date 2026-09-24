@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { Profile } from "@/lib/auth";
 import { MobileNav, type NavLink } from "@/components/MobileNav";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { displayName, initials } from "@/lib/display-name";
 
 export function AppHeader({ profile }: { profile: Profile }) {
   // Built once and handed to both the desktop row and the mobile panel, so the
@@ -50,12 +51,12 @@ export function AppHeader({ profile }: { profile: Profile }) {
 
           <Link
             href="/profile"
-            title={`${profile.email} — your profile`}
-            aria-label={`Signed in as ${profile.email}. Open your profile.`}
+            title={`${displayName(profile)} — your profile`}
+            aria-label={`Signed in as ${displayName(profile)}. Open your profile.`}
             className="inline-flex h-8 w-8 items-center justify-center rounded-full text-xs font-semibold uppercase no-underline"
             style={{ background: "var(--accent-soft)", color: "var(--accent)", border: "1px solid var(--rule)" }}
           >
-            {profile.email.slice(0, 2)}
+            {initials(profile)}
           </Link>
 
           <MobileNav links={links} />

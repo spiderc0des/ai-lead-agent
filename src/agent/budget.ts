@@ -157,6 +157,46 @@ export async function releaseBudget(
   if (error) console.error("[budget] release failed:", error.message);
 }
 
+/**
+ * Releases Apify reservations a run took but never settled or released.
+ *
+ * discover_companies reserves before it calls Apify and settles when the
+ * actor finishes. If the process dies in between, the settle never happens
+ * and the reservation sits in the shared pool forever — found on a run whose
+ * server was restarted mid-discovery, which held $0.50 of the $5 pool for a
+ * day. Only call this for a run with no live process: while discovery is in
+ * flight a reservation is legitimately open.
+ *
+ * Discovery calls within a run are sequential, so each settle or release
+ * closes the oldest open reserve; whatever reserves are left over are the
+ * dangling ones.
+ */
+export async function releaseDanglingApify(runId: string, userId?: string): Promise<number> {
+  const { data: rows } = await supabaseAdmin()
+    .from("budget_ledger")
+    .select("phase, amount_usd")
+    .eq("run_id", runId)
+    .eq("kind", "apify")
+    .order("created_at");
+
+  const open: number[] = [];
+  for (const r of rows ?? []) {
+    if (r.phase === "reserve") open.push(Number(r.amount_usd));
+    else open.shift();
+  }
+  const dangling = open.reduce((a, b) => a + b, 0);
+  if (dangling > 0) {
+    await releaseBudget(
+      "apify",
+      dangling,
+      runId,
+      userId,
+      `released ${open.length} discovery reservation(s) left open when the run's process died`,
+    );
+  }
+  return dangling;
+}
+
 export type BudgetStatus = {
   apify_remaining_usd: number;
   apify_cap_usd: number;

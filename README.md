@@ -27,7 +27,7 @@ cp .env.example .env.local     # then fill it in
 
 ### 2. Supabase
 
-Create a project, then run the three migrations in order in the SQL editor:
+Create a project, then run the migrations in order in the SQL editor:
 
 ```
 supabase/migrations/0001_init.sql          domain tables
@@ -37,7 +37,12 @@ supabase/migrations/0004_clarification.sql lets a run stop and ask
 supabase/migrations/0005_continue.sql      approve an ICP, and answer a run
 supabase/migrations/0006_run_log.sql       resume in place, and the run log
 supabase/migrations/0007_workers.sql       worker and per-person limits, set from /admin
+supabase/migrations/0008_names_roles.sql   names on people and in the run log; roles on invites
 ```
+
+Then paste the auth email templates from `supabase/email-templates/` into
+Authentication → Emails → Templates. Their README explains why the links must
+use `{{ .TokenHash }}`: invites break with the default template.
 
 The last two add run statuses. Until they are applied, the tool suite skips the
 assertions that depend on them and says so, rather than reporting a pending

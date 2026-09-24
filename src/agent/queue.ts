@@ -1,7 +1,7 @@
 import "server-only";
 import { supabaseAdmin } from "@/lib/supabase/admin";
-import { runAgent, activeRunCount, isRunning } from "@/agent/run-agent";
-import { settleBudget } from "@/agent/budget";
+import { runAgent, activeRunCount, isRunning, notifyOwner } from "@/agent/run-agent";
+import { settleBudget, releaseDanglingApify } from "@/agent/budget";
 import { getRunSettings, type RunSettings } from "@/lib/settings";
 import { recordRunEvent } from "@/lib/run-events";
 
@@ -175,6 +175,11 @@ export async function sweepOrphanedRuns(): Promise<number> {
       await recordRunEvent(run.id, run.user_id, "failed", null, {
         reason: "The server restarted while this run was in progress. Partial results are still stored.",
       });
+      // Nobody was watching when the process died; the owner hears it here.
+      void notifyOwner(run.id, "failed");
+      // A discovery call that was mid-flight when the process died reserved
+      // Apify budget and never settled it.
+      await releaseDanglingApify(run.id, run.user_id);
       // What the crashed SESSION held and spent. A resumed run's earlier
       // sessions were already settled, so only the increment since the last
       // baseline belongs to this one.

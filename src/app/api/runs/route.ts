@@ -120,7 +120,7 @@ export async function POST(request: Request) {
       );
     }
 
-    await recordRunEvent(run.id, user.id, "created", { id: user.id, email: user.email }, {
+    await recordRunEvent(run.id, user.id, "created", user, {
       objective: parsed.data.objective.trim(),
       require_icp_confirmation: limits.require_icp_confirmation,
       max_budget_usd: limits.max_budget_usd,

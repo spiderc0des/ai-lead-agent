@@ -1,10 +1,11 @@
 import { NextResponse } from "next/server";
 import { requireUser, authErrorResponse } from "@/lib/auth";
 import { supabaseAdmin } from "@/lib/supabase/admin";
-import { cancelRun } from "@/agent/run-agent";
+import { cancelRun, notifyOwner } from "@/agent/run-agent";
 import { releaseBudget } from "@/agent/budget";
 import { pumpQueue } from "@/agent/queue";
 import { recordRunEvent } from "@/lib/run-events";
+import { displayName } from "@/lib/display-name";
 
 export const runtime = "nodejs";
 
@@ -32,11 +33,11 @@ export async function POST(_request: Request, ctx: { params: Promise<{ id: strin
 
     // Logged before the abort, so the event carries who did it. The runner sees
     // a person-initiated cancel and does not log a second, actorless one.
-    await recordRunEvent(id, run.user_id, "cancelled", { id: user.id, email: user.email }, {
+    await recordRunEvent(id, run.user_id, "cancelled", user, {
       was: run.status,
     });
 
-    const wasRunning = cancelRun(id);
+    const wasRunning = cancelRun(id, displayName(user));
 
     if (!wasRunning) {
       // Queued, or orphaned by a restart: nothing to abort, just close it out.
@@ -44,7 +45,7 @@ export async function POST(_request: Request, ctx: { params: Promise<{ id: strin
         .from("runs")
         .update({
           status: "cancelled",
-          status_reason: `Cancelled by ${user.email}.`,
+          status_reason: `Cancelled by ${displayName(user)}.`,
           finished_at: new Date().toISOString(),
         })
         .eq("id", id)
@@ -58,6 +59,10 @@ export async function POST(_request: Request, ctx: { params: Promise<{ id: strin
         await supabaseAdmin().from("runs").update({ reserved_usd: 0 }).eq("id", id);
       }
       void pumpQueue();
+      // A running run emails its owner as it winds down. This one never
+      // started (or was paused), so nothing else will tell them — and if an
+      // admin stopped it, they would otherwise never find out why.
+      void notifyOwner(id, "cancelled");
     }
 
     return NextResponse.json({ ok: true, aborted: wasRunning });

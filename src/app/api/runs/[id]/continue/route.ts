@@ -151,7 +151,7 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
       );
     }
 
-    const actor = { id: user.id, email: user.email };
+    const actor = user;
     if (interrupted) {
       await recordRunEvent(id, run.user_id, "resumed", actor, { from: run.status, spent_so_far_usd: spent });
     } else if (run.status === "awaiting_confirmation") {

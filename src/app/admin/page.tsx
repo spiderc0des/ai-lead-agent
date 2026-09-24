@@ -7,6 +7,9 @@ import { Collapsible } from "@/components/Collapsible";
 import { effectiveObjectives } from "@/lib/objective-server";
 import { AdminPanel } from "@/components/AdminPanel";
 import { StatusPill } from "@/components/StatusPill";
+import { InviteForm } from "@/components/InviteForm";
+import { UsersTable, type UserRow } from "@/components/UsersTable";
+import { displayName } from "@/lib/display-name";
 
 export const dynamic = "force-dynamic";
 
@@ -30,10 +33,23 @@ export default async function AdminPage() {
         .select("id, kind, phase, amount_usd, note, created_at")
         .order("created_at", { ascending: false })
         .limit(25),
-      db.from("profiles").select("id, email, role"),
+      db.from("profiles").select("*").order("created_at"),
     ]);
 
-  const emailById = new Map((people ?? []).map((p) => [p.id, p.email]));
+  const nameById = new Map((people ?? []).map((p) => [p.id, displayName(p)]));
+
+  // Last sign-in lives on the auth user, not the profile. One page covers an
+  // invite-only team comfortably.
+  const { data: authList } = await db.auth.admin.listUsers({ perPage: 1000 });
+  const signedInAt = new Map((authList?.users ?? []).map((u) => [u.id, u.last_sign_in_at ?? null]));
+  const users: UserRow[] = (people ?? []).map((p) => ({
+    id: p.id,
+    email: p.email,
+    full_name: p.full_name ?? null,
+    role: p.role,
+    created_at: p.created_at,
+    last_sign_in_at: signedInAt.get(p.id) ?? null,
+  }));
   const objectives = await effectiveObjectives(db, runs ?? []);
 
   return (
@@ -52,6 +68,12 @@ export default async function AdminPage() {
         </div>
 
         <div className="mt-6 space-y-4">
+        <InviteForm />
+
+        <Collapsible title="Users" count={users.length} defaultOpen subtitle="roles and names">
+          <UsersTable users={users} meId={profile.id} />
+        </Collapsible>
+
         <Collapsible title="All runs" count={runs?.length ?? 0} defaultOpen subtitle="every user">
           <div className="overflow-x-auto">
             <table className="data">
@@ -70,7 +92,7 @@ export default async function AdminPage() {
                     <td className="whitespace-nowrap text-xs">
                       {new Date(r.created_at).toLocaleString()}
                     </td>
-                    <td className="text-xs">{emailById.get(r.user_id) ?? "—"}</td>
+                    <td className="text-xs">{nameById.get(r.user_id) ?? "—"}</td>
                     <td className="max-w-md truncate">
                       <Link href={`/runs/${r.id}`} style={{ color: "var(--accent)" }}>
                         {objectives.get(r.id) ?? r.objective}
