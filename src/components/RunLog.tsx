@@ -161,6 +161,18 @@ function describe(
       return { title: "Finished — needs review", tone: warn, body: reason ? <p className="hint">{reason}</p> : null };
     case "failed":
       return { title: "Failed", tone: bad, body: reason ? <p className="hint">{reason}</p> : null };
+    case "emailed":
+      return {
+        title: `Emailed the owner: ${String(d.about ?? "update")}`,
+        tone: muted,
+        body: <p className="hint">Sent to {String(d.to ?? "the owner")}.</p>,
+      };
+    case "email_failed":
+      return {
+        title: `Email not sent: ${String(d.about ?? "update")}`,
+        tone: bad,
+        body: <p className="hint">{reason ?? "The mail server refused it."}</p>,
+      };
     default:
       return { title: kind.replace(/_/g, " "), tone: muted, body: null };
   }

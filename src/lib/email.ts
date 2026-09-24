@@ -2,35 +2,49 @@ import "server-only";
 import nodemailer from "nodemailer";
 
 /**
- * Outbound mail, for the one thing worth interrupting someone about: their run
- * has finished. A run takes twenty minutes or more, so nobody should have to
- * sit and watch the page.
+ * Outbound mail: telling a run's owner when it needs them or has finished. A
+ * run takes twenty minutes or more, so nobody should have to watch the page.
  *
- * Gmail SMTP rather than an email API, for the same reason week 4 chose it: a
- * provider's sandbox only delivers to the account owner until a domain is
- * verified with DNS records, and Gmail sends from an address you already own
- * with no verification step. The cost is that the "from" address is always the
- * literal Gmail address, with only the display name ours.
+ * Two transports, chosen by which credentials are set:
+ *
+ *   BREVO_API_KEY   Brevo's HTTPS API. Used in production: Railway blocks
+ *                   outbound SMTP, and every Gmail send there timed out.
+ *                   Brevo only needs the sender ADDRESS verified (a click in
+ *                   a confirmation email), not a domain with DNS records, so
+ *                   it can mail every invited user from a Gmail address.
+ *   MAIL_USER +     Gmail SMTP. Fine locally, where port 465 is open. Kept so
+ *   MAIL_APP_PASSWORD  development needs no third-party account.
  *
  * NOTE: this is notification mail to the run's own owner. It is NOT outreach —
  * the agent still has no way to contact a lead, and none of the drafted copy
  * is ever sent anywhere by this app.
  */
 
+const BREVO_KEY = process.env.BREVO_API_KEY;
 const USER = process.env.MAIL_USER;
 const PASS = process.env.MAIL_APP_PASSWORD;
+/** The sender address. With Brevo it must be verified as a sender there. */
+const FROM = process.env.MAIL_FROM || USER;
 const FROM_NAME = process.env.MAIL_FROM_NAME || "Koya Lead Agent";
 
-export const emailEnabled = Boolean(USER && PASS);
+export const emailProvider: "brevo" | "smtp" | null =
+  BREVO_KEY && FROM ? "brevo" : USER && PASS ? "smtp" : null;
+export const emailEnabled = emailProvider !== null;
 
-const transport = emailEnabled
-  ? nodemailer.createTransport({
-      host: "smtp.gmail.com",
-      port: 465,
-      secure: true,
-      auth: { user: USER, pass: PASS },
-    })
-  : null;
+const transport =
+  emailProvider === "smtp"
+    ? nodemailer.createTransport({
+        host: "smtp.gmail.com",
+        port: 465,
+        secure: true,
+        auth: { user: USER, pass: PASS },
+        // Fail in seconds, not minutes. A host that blocks SMTP (Railway)
+        // otherwise stalls for nodemailer's default two minutes.
+        connectionTimeout: 15_000,
+        greetingTimeout: 10_000,
+        socketTimeout: 20_000,
+      })
+    : null;
 
 export type SendOutcome =
   | { sent: true }
@@ -66,13 +80,43 @@ function escapeHtml(s: string): string {
  * worse with spam filters.
  */
 async function send(to: string, subject: string, html: string, text: string): Promise<SendOutcome> {
-  if (!transport) return { sent: false, reason: "MAIL_USER / MAIL_APP_PASSWORD are not set" };
+  if (emailProvider === "brevo") return sendViaBrevo(to, subject, html, text);
+  if (!transport) {
+    return {
+      sent: false,
+      reason: "No mail credentials: set BREVO_API_KEY and MAIL_FROM (or MAIL_USER / MAIL_APP_PASSWORD for SMTP)",
+    };
+  }
   try {
     await transport.sendMail({ from: `"${FROM_NAME}" <${USER}>`, to, subject, html, text });
     return { sent: true };
   } catch (err) {
     // A notification must never take a run down with it.
     return { sent: false, reason: err instanceof Error ? err.message : String(err) };
+  }
+}
+
+async function sendViaBrevo(to: string, subject: string, html: string, text: string): Promise<SendOutcome> {
+  try {
+    const res = await fetch("https://api.brevo.com/v3/smtp/email", {
+      method: "POST",
+      headers: { "api-key": BREVO_KEY!, "content-type": "application/json", accept: "application/json" },
+      body: JSON.stringify({
+        sender: { name: FROM_NAME, email: FROM },
+        to: [{ email: to }],
+        subject,
+        htmlContent: html,
+        textContent: text,
+      }),
+      signal: AbortSignal.timeout(15_000),
+    });
+    if (res.ok) return { sent: true };
+    // Brevo explains itself in the body — an unverified sender, a bad key, a
+    // suspended account. Pass that through; it is what the log entry shows.
+    const body = (await res.json().catch(() => null)) as { message?: string; code?: string } | null;
+    return { sent: false, reason: `Brevo ${res.status}: ${body?.message ?? body?.code ?? res.statusText}` };
+  } catch (err) {
+    return { sent: false, reason: `Brevo request failed: ${err instanceof Error ? err.message : String(err)}` };
   }
 }
 

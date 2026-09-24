@@ -371,6 +371,10 @@ export async function notifyOwner(runId: string, terminal: TerminalStatus): Prom
       .select("injection_flags")
       .eq("run_id", runId);
 
+    const subjectFor: Record<string, string> = {
+      awaiting_confirmation: "refined ICP ready for review",
+      needs_clarification: "run has a question",
+    };
     const outcome = await sendRunFinished(profile.email, {
       runId,
       objective: await effectiveObjective(db, run),
@@ -388,7 +392,15 @@ export async function notifyOwner(runId: string, terminal: TerminalStatus): Prom
       injectionAttempts: (flagged ?? []).filter((p) => p.injection_flags?.length).length,
     });
 
-    if (!outcome.sent) console.log(`[email] run ${runId} notification not sent: ${outcome.reason}`);
+    // Recorded in the run's own log, so a failed email is visible where the
+    // owner looks, not only in the host's server logs.
+    const about = subjectFor[run.status ?? terminal] ?? `run ${String(run.status ?? terminal).replace(/_/g, " ")}`;
+    if (outcome.sent) {
+      await recordRunEvent(runId, run.user_id, "emailed", null, { to: profile.email, about });
+    } else {
+      console.log(`[email] run ${runId} notification not sent: ${outcome.reason}`);
+      await recordRunEvent(runId, run.user_id, "email_failed", null, { to: profile.email, about, reason: outcome.reason });
+    }
   } catch (err) {
     console.error("[email] notification failed:", err);
   }

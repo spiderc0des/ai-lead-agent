@@ -40,6 +40,10 @@ supabase/migrations/0007_workers.sql       worker and per-person limits, set fro
 supabase/migrations/0008_names_roles.sql   names on people and in the run log; roles on invites
 ```
 
+```
+supabase/migrations/0009_email_events.sql  every notification email recorded in the run log
+```
+
 Then paste the auth email templates from `supabase/email-templates/` into
 Authentication → Emails → Templates. Their README explains why the links must
 use `{{ .TokenHash }}`: invites break with the default template.
@@ -246,3 +250,24 @@ supabase/           SQL migrations
 scripts/            smoke tests, guard tests, admin seeding
 docs/               one-pager and testing evidence (untracked)
 ```
+
+## Notification email
+
+The run's owner is emailed when the refined ICP is ready for review, when a run
+stops to ask, and when it ends. Each attempt is recorded in the run's log as
+"Emailed the owner" or "Email not sent" with the reason.
+
+**On Railway, use Brevo.** Railway blocks outbound SMTP, so Gmail SMTP times out
+there (`notification not sent: Connection timeout`). Brevo sends over HTTPS:
+
+1. Create a free Brevo account.
+2. **Senders, Domains & Dedicated IPs → Senders → Add a sender** with the address
+   you want mail to come from, and click the confirmation link Brevo emails it.
+   No domain or DNS records needed.
+3. **SMTP & API → API Keys → Generate a new API key.**
+4. In Railway set `BREVO_API_KEY`, `MAIL_FROM` (the verified sender) and
+   optionally `MAIL_FROM_NAME`.
+
+Locally, Gmail SMTP (`MAIL_USER` + `MAIL_APP_PASSWORD`) still works and is used
+whenever `BREVO_API_KEY` is empty.
+

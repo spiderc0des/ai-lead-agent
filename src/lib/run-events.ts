@@ -19,7 +19,9 @@ export type RunEventKind =
   | "completed"
   | "needs_review"
   | "failed"
-  | "cancelled";
+  | "cancelled"
+  | "emailed"
+  | "email_failed";
 
 export type Actor = { id: string; email: string; full_name?: string | null } | null;
 
