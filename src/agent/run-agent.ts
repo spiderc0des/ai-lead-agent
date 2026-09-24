@@ -10,7 +10,7 @@ import { logToolCall } from "@/agent/tool-logger";
 import { emptyTally, estimateCostUsd, type TokenTally } from "@/agent/pricing";
 import { sendRunFinished } from "@/lib/email";
 import { recordRunEvent, type RunEventKind } from "@/lib/run-events";
-import { composeObjective } from "@/lib/objective";
+import { composeObjective, answersFromEvents, objectiveWasUpdated } from "@/lib/objective";
 import { effectiveObjective } from "@/lib/objective-server";
 
 /** The five skills built from the guidance docs in assets/. */
@@ -87,13 +87,12 @@ export async function runAgent(runId: string): Promise<TerminalStatus> {
 
   const { data: answeredEvents } = await supabaseAdmin()
     .from("run_events")
-    .select("detail")
+    .select("kind, detail")
     .eq("run_id", runId)
     .eq("kind", "answered")
     .order("created_at");
-  const answers = (answeredEvents ?? []).flatMap(
-    (e) => ((e.detail as { answers?: { question: string; answer: string }[] })?.answers ?? []),
-  );
+  const answers = answersFromEvents(answeredEvents ?? []);
+  const objectiveUpdated = objectiveWasUpdated(answeredEvents ?? []);
 
   const icpAlreadyApproved = Boolean(seeded.icp && seeded.icp_approved_at);
   // An ICP exists, turns have been used, and nobody approved it: an earlier
@@ -189,6 +188,7 @@ export async function runAgent(runId: string): Promise<TerminalStatus> {
       prompt: buildPrompt(composeObjective(ctx.objective, answers), {
         icpAlreadyApproved,
         resumingInterruptedWork,
+        objectiveUpdated,
         answers,
         originalObjective: ctx.objective,
       }),

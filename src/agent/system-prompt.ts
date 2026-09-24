@@ -82,9 +82,17 @@ export function buildPrompt(
     answers?: { question: string; answer: string }[];
     /** The wording the person first gave, when their answers have replaced it. */
     originalObjective?: string;
+    /** The person reviewed the earlier ICP and rewrote the objective. */
+    objectiveUpdated?: boolean;
   } = {},
 ): string {
-  const { icpAlreadyApproved = false, resumingInterruptedWork = false, answers = [], originalObjective } = opts;
+  const {
+    icpAlreadyApproved = false,
+    resumingInterruptedWork = false,
+    answers = [],
+    originalObjective,
+    objectiveUpdated = false,
+  } = opts;
 
   const header = `Qualification objective:
 
@@ -95,7 +103,11 @@ ${objective}
   // The person's replies to earlier clarification questions. Kept apart from
   // the objective so the original wording is never rewritten, and so the run
   // log can show both.
-  const replies = answers.length
+  const replies = objectiveUpdated
+    ? `
+
+The person reviewed the ICP you wrote earlier in this run and replaced the objective with the one above. The earlier ICP has been discarded — do not reuse its criteria. Refine a new ICP from this objective alone; everything it states is a user_stated constraint.`
+    : answers.length
     ? `
 
 This objective came from the person's answers to your clarification questions. Their original wording${originalObjective ? `, "${originalObjective}",` : ""} could not be searched and has been replaced — do not work from it. For context, the questions and answers were:

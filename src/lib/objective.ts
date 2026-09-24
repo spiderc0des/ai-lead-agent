@@ -42,11 +42,32 @@ export function leadCountFromObjective(objective: string): number | null {
   return Number.isFinite(n) && n > 0 ? n : null;
 }
 
-/** Pulls every answer out of a run's events, oldest round first. */
+/** The question recorded when a person rewrites the objective at the ICP review. */
+export const UPDATED_OBJECTIVE_QUESTION = "Updated qualification objective";
+
+/**
+ * Pulls the answers that make up the current objective out of a run's events,
+ * oldest first.
+ *
+ * An event marked `replaces_objective` — the person rewrote the objective at
+ * the ICP review — discards everything before it: the new wording is the
+ * whole objective, not an addition to earlier answers.
+ */
 export function answersFromEvents(
   events: { kind: string; detail: unknown }[],
 ): QA[] {
-  return events
-    .filter((e) => e.kind === "answered")
-    .flatMap((e) => ((e.detail as { answers?: QA[] } | null)?.answers ?? []));
+  let out: QA[] = [];
+  for (const e of events) {
+    if (e.kind !== "answered") continue;
+    const d = (e.detail as { answers?: QA[]; replaces_objective?: boolean } | null) ?? {};
+    if (d.replaces_objective) out = [];
+    out = out.concat(d.answers ?? []);
+  }
+  return out;
+}
+
+/** True when the most recent change to the objective was a rewrite at the ICP review. */
+export function objectiveWasUpdated(events: { kind: string; detail: unknown }[]): boolean {
+  const last = [...events].reverse().find((e) => e.kind === "answered");
+  return Boolean((last?.detail as { replaces_objective?: boolean } | null)?.replaces_objective);
 }

@@ -128,6 +128,21 @@ function describe(
         ) : null,
       };
     case "answered":
+      if (d.replaces_objective) {
+        return {
+          title: `Objective updated by ${who}`,
+          tone: accent,
+          body: (
+            <>
+              <p className="preformatted text-sm font-medium">{answers[0]?.answer}</p>
+              <p className="hint">
+                Replaced the objective at the criteria review; the ICP was refined again from it.
+                {typeof d.max_leads === "number" ? ` Qualified-lead target set to ${d.max_leads}.` : ""}
+              </p>
+            </>
+          ),
+        };
+      }
       return {
         title: `Answered by ${who}`,
         tone: accent,

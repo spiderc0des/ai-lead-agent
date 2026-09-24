@@ -2,7 +2,8 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireUser, authErrorResponse } from "@/lib/auth";
 import { supabaseAdmin } from "@/lib/supabase/admin";
-import { RunLimitsSchema } from "@/lib/schemas";
+import { RunLimitsSchema, CreateRunSchema, deriveMaxTurns } from "@/lib/schemas";
+import { leadCountFromObjective, UPDATED_OBJECTIVE_QUESTION } from "@/lib/objective";
 import { budgetStatus, reserveBudget, releaseBudget } from "@/agent/budget";
 import { pumpQueue } from "@/agent/queue";
 import { recordRunEvent } from "@/lib/run-events";
@@ -17,6 +18,11 @@ const Body = z.object({
   approve: z.boolean().optional(),
   /** Pick an interrupted (failed or cancelled) run back up where it stopped. */
   resume: z.boolean().optional(),
+  /**
+   * At the ICP review: replace the objective and refine the criteria again,
+   * in this same run. Validated like a new run's objective.
+   */
+  new_objective: z.string().optional(),
 });
 
 /** Stopped without finishing — so there is work left to pick up. */
@@ -77,13 +83,20 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
 
     // Validate the reply before touching money.
     let answeredPairs: { question: string; answer: string }[] = [];
+    let newObjective: string | null = null;
     if (interrupted) {
       if (!parsed.data.resume) {
         return NextResponse.json({ error: "Confirm the resume to continue." }, { status: 400 });
       }
     } else if (run.status === "awaiting_confirmation") {
-      if (!parsed.data.approve) {
-        return NextResponse.json({ error: "Approve the criteria to continue." }, { status: 400 });
+      if (parsed.data.new_objective !== undefined) {
+        const check = CreateRunSchema.shape.objective.safeParse(parsed.data.new_objective.trim());
+        if (!check.success) {
+          return NextResponse.json({ error: check.error.issues[0]?.message ?? "Invalid objective" }, { status: 400 });
+        }
+        newObjective = check.data;
+      } else if (!parsed.data.approve) {
+        return NextResponse.json({ error: "Approve the criteria, or give an updated objective." }, { status: 400 });
       }
     } else {
       const questions = (run.clarification_questions ?? []) as string[];
@@ -101,7 +114,16 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
 
     // The run keeps its original budget ceiling across sessions: this session
     // gets only what earlier ones left unspent.
-    const limits = RunLimitsSchema.parse(run.limits);
+    let limits = RunLimitsSchema.parse(run.limits);
+    // A rewritten objective that names a count ("find 5…") sets the lead
+    // target, as it does on the new-run form — there is no form here to
+    // override it. The turn cap follows, since it is derived from the work.
+    const askedFor = newObjective ? leadCountFromObjective(newObjective) : null;
+    const leadsChanged = askedFor !== null && Math.min(50, askedFor) !== limits.max_leads;
+    if (leadsChanged) {
+      const max_leads = Math.min(50, askedFor!);
+      limits = { ...limits, max_leads, max_turns: deriveMaxTurns({ max_scrapes: limits.max_scrapes, max_leads }) };
+    }
     const spent = Number(run.total_cost_usd ?? 0);
     const remaining = Number((limits.max_budget_usd - spent).toFixed(6));
     const turnsLeft = limits.max_turns - Number(run.num_turns ?? 0);
@@ -136,7 +158,14 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
         status_reason: null,
         finished_at: null,
         reserved_usd: remaining,
-        ...(run.status === "awaiting_confirmation" ? { icp_approved_at: new Date().toISOString() } : {}),
+        ...(newObjective
+          ? // The earlier ICP was written for the old objective. Clearing it
+            // is what makes the resumed session refine from scratch, and
+            // keeps the page from showing stale criteria meanwhile.
+            { icp: null, icp_approved_at: null, ...(leadsChanged ? { limits } : {}) }
+          : run.status === "awaiting_confirmation"
+            ? { icp_approved_at: new Date().toISOString() }
+            : {}),
       })
       .eq("id", id)
       .eq("status", run.status)
@@ -154,6 +183,15 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
     const actor = user;
     if (interrupted) {
       await recordRunEvent(id, run.user_id, "resumed", actor, { from: run.status, spent_so_far_usd: spent });
+    } else if (newObjective) {
+      // Recorded as an answer that REPLACES the objective: the log shows the
+      // new wording and who gave it, and the effective objective is derived
+      // from it without a second copy stored anywhere.
+      await recordRunEvent(id, run.user_id, "answered", actor, {
+        answers: [{ question: UPDATED_OBJECTIVE_QUESTION, answer: newObjective }],
+        replaces_objective: true,
+        ...(leadsChanged ? { max_leads: limits.max_leads } : {}),
+      });
     } else if (run.status === "awaiting_confirmation") {
       await recordRunEvent(id, run.user_id, "approved", actor, {});
     } else {

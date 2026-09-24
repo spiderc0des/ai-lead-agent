@@ -13,7 +13,8 @@ import {
   assertPublicHttpUrl,
 } from "@/lib/domain";
 import { CreateRunSchema, RunLimitsSchema, DEFAULT_LIMITS } from "@/lib/schemas";
-import { composeObjective, answersFromEvents, leadCountFromObjective } from "@/lib/objective";
+import { composeObjective, answersFromEvents, leadCountFromObjective, objectiveWasUpdated, UPDATED_OBJECTIVE_QUESTION } from "@/lib/objective";
+import { buildPrompt } from "@/agent/system-prompt";
 import { deriveMaxTurns } from "@/lib/schemas";
 import { draftFormatProblems } from "@/lib/draft-format";
 import { publicOrigin } from "@/lib/public-origin";
@@ -190,6 +191,24 @@ console.log("\n== redirects use the public address, not the container's ==");
   process.env.NEXT_PUBLIC_APP_URL = "localhost";
   check("a scheme-less configured value is ignored rather than trusted", publicOrigin(local) === "http://localhost:3000", publicOrigin(local));
   if (saved === undefined) delete process.env.NEXT_PUBLIC_APP_URL; else process.env.NEXT_PUBLIC_APP_URL = saved;
+}
+
+
+console.log("\n== an updated objective replaces everything before it ==");
+{
+  const events = [
+    { kind: "created", detail: {} },
+    { kind: "answered", detail: { answers: [{ question: "Which industry?", answer: "agencies" }] } },
+    { kind: "answered", detail: { answers: [{ question: UPDATED_OBJECTIVE_QUESTION, answer: "Find 5 UK law firms with manual intake" }], replaces_objective: true } },
+  ];
+  const answers = answersFromEvents(events);
+  check("earlier clarification answers are dropped", answers.length === 1 && answers[0].answer.startsWith("Find 5 UK"), answers);
+  check("the effective objective is the new wording alone", composeObjective("us business", answers) === "Find 5 UK law firms with manual intake");
+  check("the run knows its objective was rewritten", objectiveWasUpdated(events));
+  check("a later clarification answer is not mistaken for a rewrite", !objectiveWasUpdated([...events, { kind: "answered", detail: { answers: [{ question: "q", answer: "a" }] } }]));
+  const prompt = buildPrompt(composeObjective("us business", answers), { objectiveUpdated: true, answers, originalObjective: "us business" });
+  check("the resumed prompt says the earlier ICP is discarded", /earlier ICP has been discarded/.test(prompt) && /icp-refinement/.test(prompt), prompt.slice(0, 200));
+  check("  and does not tell it to keep the old criteria", !/Do NOT call set_icp/.test(prompt));
 }
 
 console.log("\n== objective shape guard ==");

@@ -162,7 +162,7 @@ export function RunView({ runId }: { runId: string }) {
       {run.status === "needs_clarification" && run.clarification_questions?.length ? (
         <RunResponse runId={runId} mode="clarify" questions={run.clarification_questions} />
       ) : run.status === "awaiting_confirmation" ? (
-        <RunResponse runId={runId} mode="confirm" questions={[]} />
+        <RunResponse key={objective} runId={runId} mode="confirm" questions={[]} objective={objective} />
       ) : run.status_reason ? (
         <p className="panel panel-warning">{run.status_reason}</p>
       ) : null}
