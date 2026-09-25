@@ -37,6 +37,7 @@ import {
 import { scrapePage } from "@/lib/firecrawl";
 import { sanitizeScrapedContent, findEmailAddress } from "@/agent/sanitize";
 import { draftFormatProblems } from "@/lib/draft-format";
+import { loadSkipDomains } from "@/lib/suppression";
 import { withLogging, textResult, errorResult, LimitError } from "@/agent/tools/helpers";
 
 /**
@@ -389,6 +390,9 @@ export function buildLeadTools(ctx: RunContext) {
 
         // Normalise -> filter -> dedupe as each page of results lands, then let
         // the DB unique constraint reject anything that slipped through.
+        // The team's skip list and earlier qualifications are dropped the same
+        // way aggregators are: before they cost a candidate slot or a scrape.
+        const skip = await loadSkipDomains(ctx.runId);
         const seen = new Set<string>();
         const rejected: Record<string, number> = {};
         const note = (why: string) => {
@@ -423,6 +427,11 @@ export function buildLeadTools(ctx: RunContext) {
             const domain = registrableDomain(r.url);
             if (!domain || seen.has(domain)) continue;
             seen.add(domain);
+            const skipped = skip.get(domain);
+            if (skipped) {
+              note(skipped);
+              continue;
+            }
             rows.push({
               run_id: ctx.runId,
               user_id: ctx.userId,
@@ -500,6 +509,10 @@ export function buildLeadTools(ctx: RunContext) {
           result: textResult(
             `${newOnes.length} new candidate(s) added from ${report.resultCount} raw results. ` +
               `Discarded: ${Object.entries(rejected).map(([k, v]) => `${v} ${k}`).join(", ") || "none"}.` +
+              (Object.keys(rejected).some((k) => k.startsWith("suppressed-") || k === "qualified-earlier")
+                ? ` (suppressed-* are on the team's skip list and qualified-earlier were qualified in a ` +
+                  `previous run; do not look for them again.)`
+                : "") +
               (newOnes.length < 3 && report.resultCount > 10
                 ? ` These queries mostly returned pages ABOUT companies rather than company ` +
                   `websites — try naming a specific software category and its customer instead.`

@@ -3,6 +3,9 @@
 import { useState } from "react";
 import { StatusPill } from "@/components/StatusPill";
 import { OutreachCard, type Draft } from "@/components/OutreachCard";
+import { ReviewPanel, type ReviewState } from "@/components/ReviewPanel";
+import { ProcessedPanel, type ProcessedState } from "@/components/ProcessedPanel";
+import { REVIEW_LABEL } from "@/lib/review";
 
 export type Lead = {
   id: string;
@@ -14,7 +17,7 @@ export type Lead = {
   concerns: string[];
   source_urls: string[];
   source_summary: string | null;
-};
+} & ReviewState & ProcessedState;
 
 export type SourceRef = { url: string; injection_flags: string[] };
 
@@ -39,13 +42,17 @@ type FilterKey = (typeof FILTERS)[number]["key"];
  * fully-expanded leads is several screens of prose nobody reads top to bottom.
  */
 export function LeadList({
+  runId,
   leads,
   drafts,
   sources,
+  onReviewed,
 }: {
+  runId: string;
   leads: Lead[];
   drafts: Draft[];
   sources: SourceRef[];
+  onReviewed?: () => void;
 }) {
   const [filter, setFilter] = useState<FilterKey>("all");
   const [openId, setOpenId] = useState<string | null>(null);
@@ -55,7 +62,14 @@ export function LeadList({
 
   const count = (k: FilterKey) =>
     k === "all" ? leads.length : leads.filter((l) => l.qualification_status === k).length;
-  const shown = filter === "all" ? leads : leads.filter((l) => l.qualification_status === filter);
+  const filtered = filter === "all" ? leads : leads.filter((l) => l.qualification_status === filter);
+  // In the review queue, what still needs a person comes first.
+  const shown =
+    filter === "needs_review"
+      ? [...filtered].sort((a, b) => Number(Boolean(a.review_decision)) - Number(Boolean(b.review_decision)))
+      : filtered;
+  const reviewQueue = leads.filter((l) => l.qualification_status === "needs_review");
+  const waiting = reviewQueue.filter((l) => !l.review_decision).length;
 
   return (
     <div>
@@ -73,6 +87,13 @@ export function LeadList({
           </button>
         ))}
       </div>
+      {filter === "needs_review" && reviewQueue.length > 0 && (
+        <p className="hint mt-2">
+          {waiting === 0
+            ? `All ${reviewQueue.length} reviewed.`
+            : `${waiting} of ${reviewQueue.length} still to review. Open one to check its evidence and record your verdict.`}
+        </p>
+      )}
 
       {shown.length === 0 ? (
         <p className="mt-4 text-sm" style={{ color: "var(--ink-faint)" }}>
@@ -117,15 +138,44 @@ export function LeadList({
                     )}
                   </div>
 
-                  <div className="flex shrink-0 items-center gap-2">
+                  <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
                     <span className="chip tabular-nums">{lead.confidence?.toFixed(2)}</span>
                     <StatusPill status={lead.qualification_status} />
+                    {lead.processed_at && <span className="badge badge-success">processed</span>}
+                    {lead.review_decision && (
+                      <span className={lead.review_decision === "good" ? "badge badge-success" : "badge badge-danger"}>
+                        {REVIEW_LABEL[lead.review_decision]}
+                      </span>
+                    )}
                   </div>
                 </button>
 
                 {open && (
                   <div className="border-t px-4 py-4" style={{ borderColor: "var(--rule)" }}>
                     <LeadDetail lead={lead} sources={sources} />
+                    {lead.qualification_status === "needs_review" && (
+                      <div className="mt-3">
+                        <ReviewPanel
+                          key={`${lead.id}:${lead.review_decision ?? ""}:${lead.reviewed_at ?? ""}`}
+                          endpoint={`/api/runs/${runId}/leads/${lead.id}/review`}
+                          current={lead}
+                          subject="this lead"
+                          goodHint="the evidence holds up and it's worth pursuing."
+                          notGoodHint="it doesn't fit, or the concerns are real."
+                          onSaved={onReviewed}
+                        />
+                      </div>
+                    )}
+                    {lead.qualification_status === "qualified" && (
+                      <div className="mt-3">
+                        <ProcessedPanel
+                          key={`${lead.id}:${lead.processed_at ?? ""}`}
+                          endpoint={`/api/runs/${runId}/leads/${lead.id}/processed`}
+                          current={lead}
+                          onSaved={onReviewed}
+                        />
+                      </div>
+                    )}
                     {lead.qualification_status === "qualified" && (
                       <div className="mt-3">
                         <OutreachCard

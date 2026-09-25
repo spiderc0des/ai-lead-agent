@@ -176,6 +176,26 @@ function describe(
       return { title: "Finished — needs review", tone: warn, body: reason ? <p className="hint">{reason}</p> : null };
     case "failed":
       return { title: "Failed", tone: bad, body: reason ? <p className="hint">{reason}</p> : null };
+    case "lead_reviewed":
+    case "run_reviewed": {
+      const decision = d.decision as "good" | "not_good" | null | undefined;
+      const what = kind === "lead_reviewed" ? String(d.company ?? "a lead") : "the run";
+      return {
+        title: decision
+          ? `${who} marked ${what} ${decision === "good" ? "reviewed: good" : "reviewed: not good"}`
+          : `${who} withdrew the review of ${what}`,
+        tone: decision === "good" ? ok : decision === "not_good" ? bad : muted,
+        body: d.note ? <p className="preformatted hint">{String(d.note)}</p> : null,
+      };
+    }
+    case "lead_processed":
+      return {
+        title: d.processed
+          ? `${who} marked ${String(d.company ?? "a lead")} processed${d.suppressed ? " and added it to the skip list" : ""}`
+          : `${who} unmarked ${String(d.company ?? "a lead")} as processed`,
+        tone: d.processed ? ok : muted,
+        body: d.note ? <p className="preformatted hint">{String(d.note)}</p> : null,
+      };
     case "emailed":
       return {
         title: `Emailed the owner: ${String(d.about ?? "update")}`,

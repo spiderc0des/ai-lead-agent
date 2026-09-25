@@ -42,6 +42,8 @@ supabase/migrations/0008_names_roles.sql   names on people and in the run log; r
 
 ```
 supabase/migrations/0009_email_events.sql  every notification email recorded in the run log
+supabase/migrations/0010_reviews.sql       review verdicts on needs-review leads and runs
+supabase/migrations/0011_suppression.sql   team skip list; qualified leads marked processed
 ```
 
 Then paste the auth email templates from `supabase/email-templates/` into
@@ -270,4 +272,15 @@ there (`notification not sent: Connection timeout`). Brevo sends over HTTPS:
 
 Locally, Gmail SMTP (`MAIL_USER` + `MAIL_APP_PASSWORD`) still works and is used
 whenever `BREVO_API_KEY` is empty.
+
+## Running locally against the production database
+
+Set `QUEUE_WORKER=off` to run a web-only instance: it serves pages and the API
+but never claims or sweeps runs, so it can't race the deployed worker for queued
+runs. `npm run test:http` expects one on port 3100:
+
+```bash
+QUEUE_WORKER=off npx next start -p 3100
+npm run test:http
+```
 

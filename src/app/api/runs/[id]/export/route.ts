@@ -60,9 +60,8 @@ export async function GET(request: Request, ctx: { params: Promise<{ id: string 
 
     const { data: leadRows } = await supabaseAdmin()
       .from("leads")
-      .select(
-        "id, company_name, company_domain, qualification_status, confidence, fit_reasons, concerns, source_urls, source_summary",
-      )
+      // "*" so review columns (0010_reviews.sql) come through when they exist.
+      .select("*")
       .eq("run_id", id)
       .in("qualification_status", ["qualified", "needs_review"])
       .order("company_name");

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { StatusPill } from "@/components/StatusPill";
+import { REVIEW_LABEL, type ReviewDecision } from "@/lib/review";
 
 export type RunRow = {
   id: string;
@@ -13,6 +14,8 @@ export type RunRow = {
   limits: { max_budget_usd?: number; max_leads?: number } | null;
   qualified: number;
   parent_run_id: string | null;
+  /** A person's verdict on a needs_review run. */
+  review_decision?: ReviewDecision | null;
 };
 
 const FILTERS = [
@@ -84,7 +87,16 @@ export function RunsList({ runs }: { runs: RunRow[] }) {
                     {run.limits?.max_leads ?? "—"} qualified · ${Number(run.total_cost_usd ?? 0).toFixed(4)}
                   </p>
                 </div>
-                <StatusPill status={run.status} />
+                <div className="flex shrink-0 flex-col items-end gap-1">
+                  <StatusPill status={run.status} />
+                  {run.review_decision ? (
+                    <span className={run.review_decision === "good" ? "badge badge-success" : "badge badge-danger"}>
+                      {REVIEW_LABEL[run.review_decision]}
+                    </span>
+                  ) : run.status === "needs_review" ? (
+                    <span className="hint">not reviewed yet</span>
+                  ) : null}
+                </div>
               </Link>
             </li>
           ))}

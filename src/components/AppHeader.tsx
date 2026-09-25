@@ -11,6 +11,7 @@ export function AppHeader({ profile }: { profile: Profile }) {
   const links: NavLink[] = [
     { href: "/new", label: "New run" },
     { href: "/", label: "Runs" },
+    { href: "/skip-list", label: "Skip list" },
     ...(profile.role === "admin" ? [{ href: "/admin", label: "Admin" }] : []),
   ];
 

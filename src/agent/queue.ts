@@ -32,6 +32,9 @@ let pumping = false;
  * Re-entrant calls are collapsed by the `pumping` flag.
  */
 export async function pumpQueue(): Promise<void> {
+  // A web-only instance (see instrumentation.ts) queues runs but never starts
+  // them; the deployed worker picks them up.
+  if (process.env.QUEUE_WORKER === "off") return;
   if (pumping) return;
   pumping = true;
 

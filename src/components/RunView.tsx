@@ -8,6 +8,9 @@ import { CopyButton } from "@/components/CopyButton";
 import { RunActions } from "@/components/RunActions";
 import { type Draft } from "@/components/OutreachCard";
 import { LeadList } from "@/components/LeadList";
+import { ReviewPanel, type ReviewState } from "@/components/ReviewPanel";
+import type { ProcessedState } from "@/components/ProcessedPanel";
+import { REVIEW_LABEL } from "@/lib/review";
 import { RunResponse } from "@/components/RunResponse";
 import { RunLog, type RunEvent } from "@/components/RunLog";
 import { answersFromEvents, composeObjective } from "@/lib/objective";
@@ -20,12 +23,12 @@ type Run = {
   summary: string | null; quality_scorecard: Record<string, string> | null; created_at: string;
   clarification_questions: string[] | null;
   parent_run_id: string | null;
-};
+} & ReviewState;
 type Lead = {
   id: string; company_name: string; company_domain: string;
   qualification_status: string; confidence: number;
   fit_reasons: string[]; concerns: string[]; source_urls: string[]; source_summary: string | null;
-};
+} & ReviewState & ProcessedState;
 type ToolCall = {
   id: string; tool_name: string; purpose: string | null; status: string;
   error_message: string | null; duration_ms: number | null; created_at: string;
@@ -120,6 +123,11 @@ export function RunView({ runId }: { runId: string }) {
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-3">
         <StatusPill status={run.status} />
+        {run.review_decision && (
+          <span className={run.review_decision === "good" ? "badge badge-success" : "badge badge-danger"}>
+            {REVIEW_LABEL[run.review_decision]}
+          </span>
+        )}
         {live && (
           <span className="flex items-center gap-1.5 text-xs" style={{ color: "var(--ink-faint)" }}>
             <span className="inline-block h-1.5 w-1.5 animate-pulse rounded-full" style={{ background: "var(--accent)" }} />
@@ -166,6 +174,18 @@ export function RunView({ runId }: { runId: string }) {
       ) : run.status_reason ? (
         <p className="panel panel-warning">{run.status_reason}</p>
       ) : null}
+
+      {run.status === "needs_review" && (
+        <ReviewPanel
+          key={`${run.review_decision ?? ""}:${run.reviewed_at ?? ""}`}
+          endpoint={`/api/runs/${runId}/review`}
+          current={run}
+          subject="this run"
+          goodHint="the list is usable as it stands, after checking the reason above."
+          notGoodHint="it isn't usable; re-run with a better objective or limits."
+          onSaved={() => void load()}
+        />
+      )}
 
       {run.parent_run_id && (
         <p className="hint">
@@ -253,7 +273,7 @@ export function RunView({ runId }: { runId: string }) {
             : "nothing evaluated yet"
         }
       >
-        <LeadList leads={leads} drafts={drafts} sources={sources} />
+        <LeadList runId={runId} leads={leads} drafts={drafts} sources={sources} onReviewed={() => void load()} />
       </Collapsible>
 
       {/* ------------------------------------------- scraped sources ----- */}

@@ -17,7 +17,9 @@ export default async function RunsPage() {
   const supabase = await supabaseServer();
   const { data: runs } = await supabase
     .from("runs")
-    .select("id, objective, status, created_at, total_cost_usd, limits, parent_run_id")
+    // "*" so the review columns are picked up once 0010_reviews.sql is
+    // applied, without a missing column failing the whole list before then.
+    .select("*")
     .order("created_at", { ascending: false })
     .limit(50);
 
@@ -46,6 +48,7 @@ export default async function RunsPage() {
     limits: r.limits as RunRow["limits"],
     parent_run_id: (r.parent_run_id as string | null) ?? null,
     qualified: qualifiedByRun.get(r.id as string) ?? 0,
+    review_decision: (r.review_decision as RunRow["review_decision"]) ?? null,
   }));
 
   return (
