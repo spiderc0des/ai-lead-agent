@@ -10,7 +10,7 @@ export const runtime = "nodejs";
 export const maxDuration = 300;
 
 const Body = z.object({
-  target: z.enum(["all", "emails", "linkedin"]).default("all"),
+  target: z.enum(["all", "emails", "email_1", "email_2", "email_3", "linkedin"]).default("all"),
   instruction: z.string().trim().max(1000, "Keep the instruction under 1,000 characters").optional().default(""),
 });
 

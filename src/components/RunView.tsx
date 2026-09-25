@@ -273,7 +273,14 @@ export function RunView({ runId }: { runId: string }) {
             : "nothing evaluated yet"
         }
       >
-        <LeadList runId={runId} leads={leads} drafts={drafts} sources={sources} onReviewed={() => void load()} />
+        <LeadList
+          runId={runId}
+          leads={leads}
+          drafts={drafts}
+          sources={sources}
+          onReviewed={() => void load()}
+          canRewrite={run.status !== "queued" && run.status !== "running"}
+        />
       </Collapsible>
 
       {/* ------------------------------------------- scraped sources ----- */}

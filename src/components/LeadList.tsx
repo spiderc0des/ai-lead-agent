@@ -6,6 +6,7 @@ import { OutreachCard, type Draft } from "@/components/OutreachCard";
 import { ReviewPanel, type ReviewState } from "@/components/ReviewPanel";
 import { ProcessedPanel, type ProcessedState } from "@/components/ProcessedPanel";
 import { REVIEW_LABEL } from "@/lib/review";
+import { RegenerateOutreach } from "@/components/RegenerateOutreach";
 
 export type Lead = {
   id: string;
@@ -47,12 +48,15 @@ export function LeadList({
   drafts,
   sources,
   onReviewed,
+  canRewrite = false,
 }: {
   runId: string;
   leads: Lead[];
   drafts: Draft[];
   sources: SourceRef[];
   onReviewed?: () => void;
+  /** Drafts can be rewritten once the run is no longer queued or running. */
+  canRewrite?: boolean;
 }) {
   const [filter, setFilter] = useState<FilterKey>("all");
   const [openId, setOpenId] = useState<string | null>(null);
@@ -183,9 +187,17 @@ export function LeadList({
                           companyName={lead.company_name}
                           companyDomain={lead.company_domain}
                           drafts={draftsByLead.get(lead.id) ?? []}
+                          rewrite={canRewrite ? { runId, leadId: lead.id, onDone: onReviewed } : undefined}
                         />
                       </div>
                     )}
+                    {canRewrite &&
+                      (lead.qualification_status === "qualified" || lead.review_decision === "good") &&
+                      (draftsByLead.get(lead.id) ?? []).length === 0 && (
+                        <div className="mt-3">
+                          <RegenerateOutreach runId={runId} leadId={lead.id} hasDrafts={false} />
+                        </div>
+                      )}
                   </div>
                 )}
               </li>

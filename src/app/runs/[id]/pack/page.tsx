@@ -207,16 +207,13 @@ export default async function PackPage({ params }: { params: Promise<{ id: strin
                       companyName={lead.company_name}
                       companyDomain={lead.company_domain}
                       drafts={byLead.get(lead.id) ?? []}
+                      rewrite={canRewrite ? { runId: id, leadId: lead.id } : undefined}
                     />
                   </div>
                 )}
-                {canRewrite && (
+                {canRewrite && (byLead.get(lead.id) ?? []).length === 0 && (
                   <div className="mt-2">
-                    <RegenerateOutreach
-                      runId={id}
-                      leadId={lead.id}
-                      hasDrafts={(byLead.get(lead.id) ?? []).length > 0}
-                    />
+                    <RegenerateOutreach runId={id} leadId={lead.id} hasDrafts={false} />
                   </div>
                 )}
               </section>

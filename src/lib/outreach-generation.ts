@@ -23,7 +23,16 @@ import { EmailStepSchema, NAME_PLACEHOLDER } from "@/lib/schemas";
  * once with the reasons; a second failure is reported, never stored.
  */
 
-export type Target = "all" | "emails" | "linkedin";
+/** What to (re)write: everything, the three emails, one email, or the LinkedIn note. */
+export type Target = "all" | "emails" | "email_1" | "email_2" | "email_3" | "linkedin";
+
+/** The one email a single-email target rewrites, or null. */
+function singleStep(target: Target): 1 | 2 | 3 | null {
+  const m = /^email_([123])$/.exec(target);
+  return m ? (Number(m[1]) as 1 | 2 | 3) : null;
+}
+const writesEmails = (t: Target) => t === "all" || t === "emails" || singleStep(t) !== null;
+const writesLinkedIn = (t: Target) => t === "all" || t === "linkedin";
 
 const MODEL = process.env.AGENT_MODEL || "claude-sonnet-5";
 /** Held from the shared model pool for one call, settled to the real cost. */
@@ -84,11 +93,15 @@ function toolSchema(target: Target) {
   };
   const properties: Record<string, unknown> = {};
   const required: string[] = [];
-  if (target !== "linkedin") {
+  const step = singleStep(target);
+  if (step) {
+    properties.email = { ...email, properties: { ...email.properties, step_number: { type: "integer", enum: [step] } } };
+    required.push("email");
+  } else if (writesEmails(target)) {
     properties.emails = { type: "array", items: email, minItems: 3, maxItems: 3 };
     required.push("emails");
   }
-  if (target !== "emails") {
+  if (writesLinkedIn(target)) {
     properties.linkedin_message = { type: "string", description: `Under 600 characters, opening "Hi ${NAME_PLACEHOLDER},"` };
     properties.linkedin_personalization_note = { type: "string" };
     required.push("linkedin_message", "linkedin_personalization_note");
@@ -137,15 +150,21 @@ async function callClaude(system: string, messages: unknown[], tool: ReturnType<
 /** Everything wrong with a draft, in sentences the model can act on. */
 function problemsWith(target: Target, out: Record<string, unknown>, allowed: Set<string>): string[] {
   const problems: string[] = [];
-  const emails = target !== "linkedin" ? EmailsOut.safeParse(out.emails) : null;
-  const li = target !== "emails" ? LinkedInOut.safeParse(out) : null;
+  const step = singleStep(target);
+  const emails = step
+    ? z.array(EmailStepSchema).length(1).safeParse(out.email ? [out.email] : [])
+    : writesEmails(target)
+      ? EmailsOut.safeParse(out.emails)
+      : null;
+  const li = writesLinkedIn(target) ? LinkedInOut.safeParse(out) : null;
   if (emails && !emails.success) problems.push(`The emails don't match the required shape: ${emails.error.issues[0]?.message}.`);
   if (li && !li.success) problems.push(`The LinkedIn message doesn't match the required shape: ${li.error.issues[0]?.message}.`);
   if (problems.length) return problems;
 
   if (emails?.success) {
     const steps = emails.data.map((e) => e.step_number).sort().join(",");
-    if (steps !== "1,2,3") problems.push(`Email steps must be numbered 1, 2 and 3, got ${steps}.`);
+    const want = step ? String(step) : "1,2,3";
+    if (steps !== want) problems.push(`Email step numbers must be ${want}, got ${steps}.`);
     for (const e of emails.data) {
       if (!allowed.has(e.evidence_url)) {
         problems.push(`Email ${e.step_number} cites ${e.evidence_url}, which is not one of the lead's pages. Use one of: ${[...allowed].join(", ")}.`);
@@ -208,8 +227,15 @@ export async function generateOutreach(opts: {
         .join("\n\n---\n\n")
     : "(none yet — this is the first draft)";
 
+  const step = singleStep(target);
   const what =
-    target === "all" ? "the full sequence: all three emails and the LinkedIn message" : target === "emails" ? "all three emails (leave the LinkedIn message alone)" : "the LinkedIn message only";
+    target === "all"
+      ? "the full sequence: all three emails and the LinkedIn message"
+      : target === "emails"
+        ? "all three emails (leave the LinkedIn message alone)"
+        : step
+          ? `email ${step} only. The other emails stay as they are, so keep it consistent with them and don't repeat what they already say`
+          : "the LinkedIn message only";
 
   const system =
     `You write outbound drafts for Koya Talent, for a person to review before anything is sent. ` +
@@ -268,8 +294,9 @@ export async function generateOutreach(opts: {
 
   const rows: Record<string, unknown>[] = [];
   let emailOneEvidence: string | null = null;
-  if (target !== "linkedin") {
-    for (const e of EmailsOut.parse(out.emails)) {
+  if (writesEmails(target)) {
+    const written = step ? [EmailStepSchema.parse(out.email)] : EmailsOut.parse(out.emails);
+    for (const e of written) {
       if (e.step_number === 1) emailOneEvidence = e.evidence_url;
       rows.push({
         run_id: opts.runId, user_id: L.user_id, lead_id: L.id, channel: "email", step_number: e.step_number,
@@ -277,7 +304,7 @@ export async function generateOutreach(opts: {
       });
     }
   }
-  if (target !== "emails") {
+  if (writesLinkedIn(target)) {
     const li = LinkedInOut.parse(out);
     const { data: first } = await db.from("outreach_drafts").select("evidence_url").eq("lead_id", L.id).eq("channel", "email").eq("step_number", 1).maybeSingle();
     const evidence = emailOneEvidence ?? first?.evidence_url ?? [...allowed][0];

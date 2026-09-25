@@ -274,12 +274,25 @@ async function main() {
         check("  the LinkedIn message changed and follows the instruction", newLi?.body !== oldLinkedIn && /operations coordinator/i.test(newLi?.body ?? "") && (newLi?.body.length ?? 999) <= 300, newLi?.body);
         check("  the emails were left alone", newEmails.map((e) => e.body).join("|") === before.join("|"));
 
+        const one = await call("POST", `/api/runs/${run.id}/leads/${reviewLead}/outreach`, {
+          target: "email_2",
+          instruction: "Make email 2 about the 14-step checklist, in under 50 words.",
+        });
+        check("rewrites a single email with an instruction", one.status === 200, one);
+        const { data: afterOne } = await db.from("outreach_drafts").select("*").eq("lead_id", reviewLead);
+        const byStep = (rows: typeof afterOne, n: number) => rows?.find((d) => d.channel === "email" && d.step_number === n)?.body;
+        const e2 = byStep(afterOne, 2) ?? "";
+        check("  email 2 changed and follows the instruction", e2 !== before[1] && /14-step|checklist/i.test(e2) && e2.split(/\s+/).length <= 70, e2);
+        check("  emails 1 and 3 and the LinkedIn message were left alone",
+          byStep(afterOne, 1) === before[0] && byStep(afterOne, 3) === before[2] &&
+          afterOne?.find((d) => d.channel === "linkedin")?.body === newLi?.body);
+
         const bad = await call("POST", `/api/runs/${run.id}/leads/${reviewLead}/outreach`, { target: "sms" });
         check("an unknown target is rejected", bad.status === 400, bad);
 
         const { data: ev } = await db.from("run_events").select("kind, detail").eq("run_id", run.id).eq("kind", "drafts_generated");
         if ((ev ?? []).length === 0) skip("drafts_generated log entries: apply 0012_draft_events.sql");
-        else check("  each (re)write is in the run log with its instruction", ev!.length === 2 && ev!.some((e) => /Operations Coordinator/.test(String((e.detail as { instruction?: string }).instruction))), ev);
+        else check("  each (re)write is in the run log with its instruction", ev!.length === 3 && ev!.some((e) => /Operations Coordinator/.test(String((e.detail as { instruction?: string }).instruction))), ev);
 
         const md = await fetch(`${BASE}/api/runs/${run.id}/export?format=md`, { headers: { cookie } }).then((r) => r.text());
         check("the Markdown pack has an Approved at review section with the new drafts", /## Approved at review/.test(md) && md.includes("Review Me Co") && md.includes("[Name]"));
