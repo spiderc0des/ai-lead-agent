@@ -5,6 +5,7 @@ import { supabaseAdmin } from "@/lib/supabase/admin";
 import { AppHeader } from "@/components/AppHeader";
 import { OutreachCard, type Draft } from "@/components/OutreachCard";
 import { CopyButton } from "@/components/CopyButton";
+import { RegenerateOutreach } from "@/components/RegenerateOutreach";
 import type { Icp } from "@/lib/schemas";
 import { effectiveObjective } from "@/lib/objective-server";
 
@@ -34,11 +35,13 @@ export default async function PackPage({ params }: { params: Promise<{ id: strin
   // This route reads with the service role, so ownership is checked here.
   if (run.user_id !== profile.id && profile.role !== "admin") redirect("/");
 
+  // Qualified leads, then needs-review leads a reviewer marked good: both are
+  // worth writing to. "*" so review columns come through once they exist.
   const { data: leadRows } = await db
     .from("leads")
-    .select("id, company_name, company_domain, confidence, fit_reasons, concerns, source_urls, source_summary")
+    .select("*")
     .eq("run_id", id)
-    .eq("qualification_status", "qualified")
+    .in("qualification_status", ["qualified", "needs_review"])
     .order("company_name");
 
   const { data: draftRows } = await db
@@ -46,7 +49,13 @@ export default async function PackPage({ params }: { params: Promise<{ id: strin
     .select("id, lead_id, channel, step_number, subject, body, personalization_note, evidence_url")
     .eq("run_id", id);
 
-  const leads = leadRows ?? [];
+  const all = leadRows ?? [];
+  const leads = [
+    ...all.filter((l) => l.qualification_status === "qualified"),
+    ...all.filter((l) => l.qualification_status === "needs_review" && l.review_decision === "good"),
+  ];
+  const approvedCount = leads.length - all.filter((l) => l.qualification_status === "qualified").length;
+  const canRewrite = !["queued", "running"].includes(run.status);
   const byLead = new Map<string, Draft[]>();
   for (const d of (draftRows ?? []) as Draft[]) byLead.set(d.lead_id, [...(byLead.get(d.lead_id) ?? []), d]);
 
@@ -65,7 +74,8 @@ export default async function PackPage({ params }: { params: Promise<{ id: strin
           <div>
             <h1 className="text-lg font-semibold">Outreach sample pack</h1>
             <p className="hint">
-              {leads.length} qualified {leads.length === 1 ? "lead" : "leads"} ·{" "}
+              {leads.length - approvedCount} qualified
+              {approvedCount ? ` + ${approvedCount} approved at review` : ""} ·{" "}
               {new Date(run.created_at).toLocaleDateString()} · $
               {Number(run.total_cost_usd ?? 0).toFixed(4)}
             </p>
@@ -140,21 +150,36 @@ export default async function PackPage({ params }: { params: Promise<{ id: strin
         {leads.length === 0 ? (
           <p className="panel panel-warning mt-5">
             This run produced no qualified leads{run.status_reason ? ` — ${run.status_reason}` : ""}.
+            Needs-review leads you mark &quot;reviewed: good&quot; on the run page appear here, ready for outreach.
           </p>
         ) : (
           <div className="mt-6 space-y-8">
             {leads.map((lead, i) => (
               <section key={lead.id}>
-                <h2 className="text-sm font-semibold">
-                  {i + 1}. {lead.company_name}{" "}
-                  <span className="font-normal" style={{ color: "var(--ink-faint)" }}>{lead.company_domain}</span>
+                <h2 className="flex flex-wrap items-center gap-2 text-sm font-semibold">
+                  <span>
+                    {i + 1}. {lead.company_name}{" "}
+                    <span className="font-normal" style={{ color: "var(--ink-faint)" }}>{lead.company_domain}</span>
+                  </span>
+                  {lead.qualification_status === "needs_review" && (
+                    <span className="badge badge-success">approved at review</span>
+                  )}
                 </h2>
 
                 <div className="card mt-2">
                   <h3 className="label">Source context</h3>
                   <p className="text-sm">{lead.source_summary}</p>
 
-                  <h3 className="label mt-3">Why it qualified</h3>
+                  {lead.qualification_status === "needs_review" && lead.review_note && (
+                    <>
+                      <h3 className="label mt-3">Reviewer&apos;s note{lead.reviewed_by_name ? ` (${lead.reviewed_by_name})` : ""}</h3>
+                      <p className="text-sm">{lead.review_note}</p>
+                    </>
+                  )}
+
+                  <h3 className="label mt-3">
+                    {lead.qualification_status === "qualified" ? "Why it qualified" : "Why it might fit"}
+                  </h3>
                   <ul className="list-disc pl-5 text-sm">{lead.fit_reasons?.map((r: string) => <li key={r}>{r}</li>)}</ul>
 
                   {lead.concerns?.length > 0 && (
@@ -176,13 +201,24 @@ export default async function PackPage({ params }: { params: Promise<{ id: strin
                   </ul>
                 </div>
 
-                <div className="mt-2">
-                  <OutreachCard
-                    companyName={lead.company_name}
-                    companyDomain={lead.company_domain}
-                    drafts={byLead.get(lead.id) ?? []}
-                  />
-                </div>
+                {(byLead.get(lead.id) ?? []).length > 0 && (
+                  <div className="mt-2">
+                    <OutreachCard
+                      companyName={lead.company_name}
+                      companyDomain={lead.company_domain}
+                      drafts={byLead.get(lead.id) ?? []}
+                    />
+                  </div>
+                )}
+                {canRewrite && (
+                  <div className="mt-2">
+                    <RegenerateOutreach
+                      runId={id}
+                      leadId={lead.id}
+                      hasDrafts={(byLead.get(lead.id) ?? []).length > 0}
+                    />
+                  </div>
+                )}
               </section>
             ))}
           </div>

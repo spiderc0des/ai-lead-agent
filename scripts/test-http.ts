@@ -222,6 +222,72 @@ async function main() {
       }
     }
 
+    console.log("\n== writing and rewriting outreach from the pack ==");
+    {
+      // Evidence the generator may cite: one stored page per lead.
+      const page = (domain: string, text: string) => ({
+        run_id: run.id, user_id: admin.id, url: `https://${domain}/`, http_status: 200,
+        title: domain, content_markdown: text, content_chars: text.length, scraper: "firecrawl",
+      });
+      await db.from("page_sources").insert([
+        page("review-me-test.example",
+          "Review Me Co is a 12-person bookkeeping firm in Austin, Texas, serving local restaurants. " +
+          "New clients are onboarded with a 14-step checklist that our founder, Dana, runs by hand. " +
+          "We are hiring an Operations Coordinator to take over client onboarding and monthly reporting."),
+        page("qualified-test.example",
+          "Qualified Co builds scheduling software for physiotherapy clinics. Our team of 20 is fully remote. " +
+          "Customers include 300 clinics across the US. We recently launched automated appointment reminders."),
+      ]);
+
+      // Reset the needs-review lead to unreviewed: outreach must be refused.
+      await db.from("leads").update({ review_decision: null, reviewed_by_name: null }).eq("id", reviewLead);
+      const refused = await call("POST", `/api/runs/${run.id}/leads/${reviewLead}/outreach`, { target: "all" });
+      check("outreach is refused for an unreviewed needs-review lead", refused.status === 409, refused);
+
+      const reviewed = await call("POST", `/api/runs/${run.id}/leads/${reviewLead}/review`, { decision: "good", note: "Fits; small team." });
+      if (reviewed.status !== 200) {
+        skip("outreach for approved leads: needs 0010_reviews.sql");
+      } else {
+        const t0 = Date.now();
+        const first = await call("POST", `/api/runs/${run.id}/leads/${reviewLead}/outreach`, { target: "all" });
+        check(`writes first drafts for a lead reviewed as good (${Math.round((Date.now() - t0) / 1000)}s)`, first.status === 200, first);
+        const { data: drafts } = await db.from("outreach_drafts").select("*").eq("lead_id", reviewLead);
+        const emails = (drafts ?? []).filter((d) => d.channel === "email").sort((a, b) => a.step_number - b.step_number);
+        const li = (drafts ?? []).find((d) => d.channel === "linkedin");
+        check("  3 emails and a LinkedIn message are stored", emails.length === 3 && Boolean(li), (drafts ?? []).length);
+        check("  every email cites the lead's own page", emails.every((e) => e.evidence_url === "https://review-me-test.example/"), emails.map((e) => e.evidence_url));
+        check("  greetings, sign-offs and Koya are in place", emails.every((e) => e.body.includes("[Name]") && e.body.includes("[Your name]")) && /\bKoya\b/.test(emails[0]?.body ?? ""));
+        check("  notes carry the date the page was read", emails.every((e) => /\(page read \d{4}-\d{2}-\d{2}\)/.test(e.personalization_note ?? "")));
+        check("  the cost is reported", typeof first.body.costUsd === "number" && Number(first.body.costUsd) > 0, first.body.costUsd);
+        console.log(`       email 1: ${emails[0]?.subject} | ${String(emails[0]?.body).replace(/\n+/g, " ").slice(0, 160)}…`);
+
+        const before = emails.map((e) => e.body);
+        const oldLinkedIn = li?.body;
+        const rewrite = await call("POST", `/api/runs/${run.id}/leads/${reviewLead}/outreach`, {
+          target: "linkedin",
+          instruction: "Mention that they are hiring an Operations Coordinator, and keep it under 300 characters.",
+        });
+        check("rewrites just the LinkedIn message with an instruction", rewrite.status === 200, rewrite);
+        const { data: after } = await db.from("outreach_drafts").select("*").eq("lead_id", reviewLead);
+        const newLi = (after ?? []).find((d) => d.channel === "linkedin");
+        const newEmails = (after ?? []).filter((d) => d.channel === "email").sort((a, b) => a.step_number - b.step_number);
+        check("  the LinkedIn message changed and follows the instruction", newLi?.body !== oldLinkedIn && /operations coordinator/i.test(newLi?.body ?? "") && (newLi?.body.length ?? 999) <= 300, newLi?.body);
+        check("  the emails were left alone", newEmails.map((e) => e.body).join("|") === before.join("|"));
+
+        const bad = await call("POST", `/api/runs/${run.id}/leads/${reviewLead}/outreach`, { target: "sms" });
+        check("an unknown target is rejected", bad.status === 400, bad);
+
+        const { data: ev } = await db.from("run_events").select("kind, detail").eq("run_id", run.id).eq("kind", "drafts_generated");
+        if ((ev ?? []).length === 0) skip("drafts_generated log entries: apply 0012_draft_events.sql");
+        else check("  each (re)write is in the run log with its instruction", ev!.length === 2 && ev!.some((e) => /Operations Coordinator/.test(String((e.detail as { instruction?: string }).instruction))), ev);
+
+        const md = await fetch(`${BASE}/api/runs/${run.id}/export?format=md`, { headers: { cookie } }).then((r) => r.text());
+        check("the Markdown pack has an Approved at review section with the new drafts", /## Approved at review/.test(md) && md.includes("Review Me Co") && md.includes("[Name]"));
+        const pack = await fetch(`${BASE}/runs/${run.id}/pack`, { headers: { cookie } }).then((r) => r.text());
+        check("the pack page lists the approved lead", /approved at review/i.test(pack) && pack.includes("Review Me Co"));
+      }
+    }
+
     console.log("\n== the spreadsheet carries the verdicts ==");
     {
       const res = await fetch(`${BASE}/api/runs/${run.id}/export?format=xlsx`, { headers: { cookie } });

@@ -176,7 +176,8 @@ export function LeadList({
                         />
                       </div>
                     )}
-                    {lead.qualification_status === "qualified" && (
+                    {(lead.qualification_status === "qualified" ||
+                      (lead.review_decision === "good" && (draftsByLead.get(lead.id) ?? []).length > 0)) && (
                       <div className="mt-3">
                         <OutreachCard
                           companyName={lead.company_name}

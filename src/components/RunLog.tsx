@@ -188,6 +188,19 @@ function describe(
         body: d.note ? <p className="preformatted hint">{String(d.note)}</p> : null,
       };
     }
+    case "drafts_generated":
+      return {
+        title: `${who} ${d.instruction ? "rewrote" : "wrote"} outreach for ${String(d.company ?? "a lead")}${
+          d.target === "emails" ? " (emails)" : d.target === "linkedin" ? " (LinkedIn)" : ""
+        }`,
+        tone: accent,
+        body: (
+          <p className="hint">
+            {d.instruction ? <>Instruction: &ldquo;{String(d.instruction)}&rdquo;. </> : null}
+            {typeof d.cost_usd === "number" ? `Cost $${d.cost_usd.toFixed(3)}.` : null}
+          </p>
+        ),
+      };
     case "lead_processed":
       return {
         title: d.processed

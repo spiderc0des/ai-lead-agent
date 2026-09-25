@@ -44,6 +44,7 @@ supabase/migrations/0008_names_roles.sql   names on people and in the run log; r
 supabase/migrations/0009_email_events.sql  every notification email recorded in the run log
 supabase/migrations/0010_reviews.sql       review verdicts on needs-review leads and runs
 supabase/migrations/0011_suppression.sql   team skip list; qualified leads marked processed
+supabase/migrations/0012_draft_events.sql  outreach rewrites recorded in the run log
 ```
 
 Then paste the auth email templates from `supabase/email-templates/` into

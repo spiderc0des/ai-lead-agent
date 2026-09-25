@@ -18,6 +18,9 @@ type Lead = {
   concerns: string[];
   source_urls: string[];
   source_summary: string | null;
+  review_decision?: string | null;
+  review_note?: string | null;
+  reviewed_by_name?: string | null;
 };
 
 type Draft = {
@@ -68,6 +71,9 @@ export async function GET(request: Request, ctx: { params: Promise<{ id: string 
 
     const allLeads = (leadRows ?? []) as Lead[];
     const leads = allLeads.filter((l) => l.qualification_status === "qualified");
+    // Needs-review leads a person checked and marked good: part of the pack,
+    // in their own section, never counted as qualified.
+    const approved = allLeads.filter((l) => l.qualification_status === "needs_review" && l.review_decision === "good");
     const needsReview = allLeads.filter((l) => l.qualification_status === "needs_review");
 
     if (format === "xlsx") {
@@ -137,6 +143,7 @@ export async function GET(request: Request, ctx: { params: Promise<{ id: string 
       `**Generated:** ${new Date().toISOString()}  `,
       `**Status:** ${run.status}${run.status_reason ? ` — ${run.status_reason}` : ""}  `,
       `**Qualified leads:** ${leads.length}  `,
+      ...(approved.length ? [`**Approved at review:** ${approved.length} (needs-review leads a reviewer marked good)  `] : []),
       `**Estimated model cost:** $${Number(run.total_cost_usd ?? 0).toFixed(4)}`,
       ``,
       `## Qualification objective`,
@@ -185,9 +192,13 @@ export async function GET(request: Request, ctx: { params: Promise<{ id: string 
 
     if (run.summary) out.push(`## Agent summary`, ``, run.summary, ``);
 
+    const packLeads = [...leads.map((l) => ({ l, approvedAtReview: false })), ...approved.map((l) => ({ l, approvedAtReview: true }))];
     out.push(`---`, ``, `## Qualified leads`, ``);
 
-    for (const [i, lead] of leads.entries()) {
+    for (const [i, { l: lead, approvedAtReview }] of packLeads.entries()) {
+      if (approvedAtReview && (i === 0 || !packLeads[i - 1].approvedAtReview)) {
+        out.push(`## Approved at review`, ``, `_Marked needs review by the agent; a person checked the evidence and marked it good._`, ``);
+      }
       const leadDrafts = (byLead.get(lead.id) ?? []).slice().sort((a, b) => {
         if (a.channel !== b.channel) return a.channel === "email" ? -1 : 1;
         return a.step_number - b.step_number;
@@ -206,6 +217,9 @@ export async function GET(request: Request, ctx: { params: Promise<{ id: string 
         ``,
         ...(lead.source_urls ?? []).map((u) => `- ${u}`),
         ``,
+        ...(approvedAtReview && lead.review_note
+          ? [`**Reviewer's note${lead.reviewed_by_name ? ` (${lead.reviewed_by_name})` : ""}:** ${lead.review_note}`, ``]
+          : []),
         `**Why it fits**`,
         ``,
         ...(lead.fit_reasons ?? []).map((r) => `- ${r}`),

@@ -24,7 +24,8 @@ export type RunEventKind =
   | "email_failed"
   | "lead_reviewed"
   | "run_reviewed"
-  | "lead_processed";
+  | "lead_processed"
+  | "drafts_generated";
 
 export type Actor = { id: string; email: string; full_name?: string | null } | null;
 
